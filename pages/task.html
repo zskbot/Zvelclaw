@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Task — Zvelclaw</title>
+  <link rel="stylesheet" href="../app.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+  <nav class="topbar">
+    <button class="menu-btn" data-menu aria-expanded="false" aria-label="Mở menu" type="button"><span class="hamb"><i></i><i></i><i></i></span></button>
+    <a class="brand" href="../"><span class="brand-mark">⌁</span>Zvelclaw</a>
+    <span class="page-title">Task</span>
+  </nav>
+
+  <aside class="drawer">
+    <div class="drawer-head">ZVELCLAW / NAVIGATION</div>
+    <a href="new.html"><span class="ico">01</span>Mới</a>
+    <a class="active" href="projects.html" aria-current="page"><span class="ico">02</span>Dự án</a>
+    <a href="artifacts.html"><span class="ico">03</span>Cổ vật</a>
+    <a href="codes.html"><span class="ico">04</span>Mã số</a>
+    <a href="customize.html"><span class="ico">05</span>Tùy chỉnh</a>
+    <a href="design.html"><span class="ico">06</span>Thiết kế</a>
+    <a href="settings.html"><span class="ico">07</span>Cài đặt</a>
+  </aside>
+
+  <main class="shell">
+    <section class="hero">
+      <div class="eyebrow">TASK · DETAIL</div>
+      <h1 id="task-title">Đang tải task…</h1>
+      <p class="lead" id="task-id">Đang tải manifest từ GitHub.</p>
+      <div class="toolbar">
+        <a class="btn" href="projects.html">← Dự án</a>
+        <a class="btn primary" href="new.html">Tạo task →</a>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="grid">
+        <article class="card"><div class="num">STATE</div><h2 id="state">—</h2><p>Trạng thái hiện tại của task.</p></article>
+        <article class="card"><div class="num">EXECUTOR</div><h2 id="execution-mode">—</h2><p>Chế độ thực thi được task chọn.</p></article>
+        <article class="card"><div class="num">PROJECT</div><h2 id="project">—</h2><p>Repository sở hữu task manifest.</p></article>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="eyebrow">PIPELINE · LIFECYCLE</div>
+      <div id="pipeline" class="grid"></div>
+    </section>
+
+    <section class="section">
+      <div class="eyebrow">MANIFEST · EVENTS</div>
+      <div id="events" class="list"><div class="empty">Đang tải events...</div></div>
+    </section>
+  </main>
+
+  <footer class="footer"><span>Zvelclaw · Task</span><span id="created-at">Created · —</span></footer>
+  <script src="../app.js"></script>
+  <script>
+    (() => {
+      const params = new URLSearchParams(window.location.search);
+      const id = params.get('id');
+      const title = document.querySelector('#task-title');
+      const taskId = document.querySelector('#task-id');
+      const state = document.querySelector('#state');
+      const mode = document.querySelector('#execution-mode');
+      const project = document.querySelector('#project');
+      const pipeline = document.querySelector('#pipeline');
+      const events = document.querySelector('#events');
+      const createdAt = document.querySelector('#created-at');
+
+      const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
+      const formatDate = (value) => {
+        if (!value) return 'unknown';
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? value : date.toLocaleString('vi-VN');
+      };
+      const currentState = (value) => String(value || 'created').toLowerCase();
+      const stages = [
+        ['created', 'Task created'],
+        ['executing', 'Executor'],
+        ['review', 'Review'],
+        ['gated', 'Gate'],
+        ['pr_created', 'GitHub PR'],
+        ['deployed', 'Deploy']
+      ];
+      const rank = { created: 0, executing: 1, review: 2, gated: 3, pr_created: 4, deployed: 5 };
+
+      if (!id) {
+        title.textContent = 'Thiếu task ID';
+        taskId.textContent = 'URL cần có dạng task.html?id=<task-id>.';
+        events.innerHTML = '<div class="empty">Không có task ID để tải.</div>';
+        pipeline.innerHTML = '';
+        return;
+      }
+
+      fetch(`/api/tasks?id=${encodeURIComponent(id)}`, { headers: { Accept: 'application/json' } })
+        .then(async (response) => {
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+          return data.task;
+        })
+        .then((task) => {
+          const active = currentState(task.state);
+          title.textContent = task.description || 'Untitled task';
+          taskId.textContent = task.id || id;
+          state.textContent = active.toUpperCase();
+          mode.textContent = task.executionMode || 'local';
+          project.textContent = task.project || '—';
+          createdAt.textContent = `Created · ${formatDate(task.createdAt)}`;
+
+          pipeline.innerHTML = stages.map(([key, label]) => {
+            const done = key === active || (rank[active] !== undefined && rank[key] < rank[active]);
+            const failed = active === 'failed' && key !== 'created';
+            const status = failed ? 'BLOCKED' : done ? 'DONE' : 'PENDING';
+            return `<article class="card"><div class="num">${escapeHtml(key.toUpperCase())}</div><h2>${escapeHtml(label)}</h2><p>${status}</p><span class="badge">${status}</span></article>`;
+          }).join('');
+
+          const eventList = Array.isArray(task.events) ? task.events : [];
+          events.innerHTML = eventList.length ? eventList.map((event) => `
+            <article class="row">
+              <div><strong>${escapeHtml(event.type || 'event')}</strong><small>${escapeHtml(formatDate(event.at))} · ${escapeHtml(event.source || 'zvelclaw')}</small></div>
+              <span class="badge">EVENT</span>
+            </article>
+          `).join('') : '<div class="empty">Chưa có event.</div>';
+        })
+        .catch((error) => {
+          title.textContent = 'Không tải được task';
+          taskId.textContent = id;
+          events.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
+          pipeline.innerHTML = '';
+        });
+    })();
+  </script>
+</body>
+</html>
