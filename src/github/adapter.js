@@ -24,6 +24,12 @@ async function github(path, options = {}) {
   return body;
 }
 
+function splitRepo(repository) {
+  const [owner, repo] = repository.split('/');
+  if (!owner || !repo || repository.split('/').length !== 2) throw new Error(`Invalid GITHUB_REPOSITORY: ${repository}`);
+  return { owner, repo };
+}
+
 export function githubPlan(task) {
   const branch = `zvelclaw/${task.id}`;
   return {
@@ -41,13 +47,9 @@ export function githubReady() {
 
 export async function createGitHubPR(task, plan = githubPlan(task)) {
   if (!githubReady()) return { provider: 'github', skipped: true, reason: 'GITHUB_TOKEN is not configured' };
-
-  const [owner, repo] = plan.repository.split('/');
-  if (!owner || !repo) throw new Error(`Invalid GITHUB_REPOSITORY: ${plan.repository}`);
-
+  const { owner, repo } = splitRepo(plan.repository);
   const base = await github(`/repos/${owner}/${repo}/git/ref/heads/${encodeURIComponent(plan.pullRequest.base)}`);
-  const branchPath = `/repos/${owner}/${repo}/git/refs`;
-  await github(branchPath, {
+  await github(`/repos/${owner}/${repo}/git/refs`, {
     method: 'POST',
     body: JSON.stringify({ ref: `refs/heads/${plan.branch}`, sha: base.object.sha })
   });
@@ -62,11 +64,7 @@ export async function createGitHubPR(task, plan = githubPlan(task)) {
 
   await github(`/repos/${owner}/${repo}/contents/${manifestPath}`, {
     method: 'PUT',
-    body: JSON.stringify({
-      message: plan.commitMessage,
-      content,
-      branch: plan.branch
-    })
+    body: JSON.stringify({ message: plan.commitMessage, content, branch: plan.branch })
   });
 
   const pr = await github(`/repos/${owner}/${repo}/pulls`, {
@@ -82,12 +80,48 @@ export async function createGitHubPR(task, plan = githubPlan(task)) {
   });
 
   return {
-    provider: 'github',
-    repository: plan.repository,
-    branch: plan.branch,
-    prNumber: pr.number,
-    url: pr.html_url,
-    state: pr.state,
-    draft: pr.draft ?? true
+    provider: 'github', repository: plan.repository, branch: plan.branch,
+    prNumber: pr.number, url: pr.html_url, state: pr.state, draft: pr.draft ?? true
+  };
+}
+
+export async function inspectGitHubPR(prNumber, repository = repoName()) {
+  if (!githubReady()) return { passed: false, reason: 'GITHUB_TOKEN is not configured' };
+  const { owner, repo } = splitRepo(repository);
+  const pr = await github(`/repos/${owner}/${repo}/pulls/${prNumber}`);
+  const reviews = await github(`/repos/${owner}/${repo}/pulls/${prNumber}/reviews`);
+  const checks = await github(`/repos/${owner}/${repo}/commits/${pr.head.sha}/check-runs?per_page=100`, {
+    headers: { Accept: 'application/vnd.github+json' }
+  });
+  const threads = await github(`/repos/${owner}/${repo}/pulls/${prNumber}/comments?per_page=100`);
+
+  const latestByUser = new Map();
+  for (const review of reviews) latestByUser.set(review.user?.login, review.state);
+  const approved = [...latestByUser.values()].includes('APPROVED');
+  const changesRequested = [...latestByUser.values()].includes('CHANGES_REQUESTED');
+  const unresolvedComments = threads.filter(comment => comment.in_reply_to_id == null && comment.body);
+  const completed = (checks.check_runs || []).every(check => check.status === 'completed');
+  const checksPassed = completed && (checks.check_runs || []).every(check => check.conclusion === 'success' || check.conclusion === 'skipped' || check.conclusion === 'neutral');
+
+  const reasons = [];
+  if (pr.state !== 'open') reasons.push(`PR is ${pr.state}.`);
+  if (pr.draft) reasons.push('PR is still draft.');
+  if (!approved) reasons.push('No approved GitHub review.');
+  if (changesRequested) reasons.push('A reviewer requested changes.');
+  if (!completed) reasons.push('CI checks are not complete.');
+  if (!checksPassed) reasons.push('One or more CI checks did not pass.');
+  if (unresolvedComments.length) reasons.push(`PR has ${unresolvedComments.length} review comment(s) requiring attention.`);
+
+  return {
+    passed: reasons.length === 0,
+    repository,
+    prNumber,
+    headSha: pr.head.sha,
+    draft: pr.draft,
+    approved,
+    changesRequested,
+    checks: (checks.check_runs || []).map(check => ({ name: check.name, status: check.status, conclusion: check.conclusion })),
+    unresolvedComments: unresolvedComments.length,
+    reason: reasons.length ? reasons.join(' ') : 'GitHub PR gate passed.'
   };
 }
