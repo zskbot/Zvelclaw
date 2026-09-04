@@ -86,11 +86,12 @@ export async function createGitHubPR(task, plan = githubPlan(task)) {
 }
 
 export async function inspectGitHubPR(prNumber, repository = repoName()) {
-  if (!githubReady()) return { passed: false, reason: 'GITHUB_TOKEN is not configured' };
+  if (!githubReady()) return { passed: false, reason: 'GITHUB_TOKEN is not configured', prNumber, checks: [], unresolvedComments: 0 };
   const { owner, repo } = splitRepo(repository);
   const pr = await github(`/repos/${owner}/${repo}/pulls/${prNumber}`);
   const reviews = await github(`/repos/${owner}/${repo}/pulls/${prNumber}/reviews`);
   const checks = await github(`/repos/${owner}/${repo}/commits/${pr.head.sha}/check-runs?per_page=100`);
+  const threads = await github(`/repos/${owner}/${repo}/pulls/${prNumber}/comments?per_page=100`);
 
   const latestByUser = new Map();
   for (const review of reviews) {
@@ -102,12 +103,14 @@ export async function inspectGitHubPR(prNumber, repository = repoName()) {
   const checkRuns = checks.check_runs || [];
   const completed = checkRuns.length > 0 && checkRuns.every(check => check.status === 'completed');
   const checksPassed = completed && checkRuns.every(check => ['success', 'skipped', 'neutral'].includes(check.conclusion));
+  const unresolvedComments = (threads || []).filter(comment => comment.in_reply_to_id == null && comment.body).length;
 
   const reasons = [];
   if (pr.state !== 'open') reasons.push(`PR is ${pr.state}.`);
   if (pr.draft) reasons.push('PR is still draft.');
   if (!approved) reasons.push('No approved GitHub review.');
   if (changesRequested) reasons.push('A reviewer requested changes.');
+  if (unresolvedComments) reasons.push(`${unresolvedComments} PR review comment(s) require resolution.`);
   if (!checkRuns.length) reasons.push('No CI checks are reported for the PR head commit.');
   else if (!completed) reasons.push('CI checks are not complete.');
   else if (!checksPassed) reasons.push('One or more CI checks did not pass.');
@@ -121,7 +124,20 @@ export async function inspectGitHubPR(prNumber, repository = repoName()) {
     approved,
     changesRequested,
     checks: checkRuns.map(check => ({ name: check.name, status: check.status, conclusion: check.conclusion })),
-    unresolvedComments: null,
+    unresolvedComments,
     reason: reasons.length ? reasons.join(' ') : 'GitHub PR gate passed.'
   };
+}
+
+export async function mergeGitHubPR(prNumber, repository = repoName(), method = 'squash') {
+  if (!githubReady()) throw new Error('GITHUB_TOKEN is required for merge.');
+  const gate = await inspectGitHubPR(prNumber, repository);
+  if (!gate.passed) throw new Error(`Merge blocked by Gate: ${gate.reason}`);
+  const { owner, repo } = splitRepo(repository);
+  const result = await github(`/repos/${owner}/${repo}/pulls/${prNumber}/merge`, {
+    method: 'PUT',
+    body: JSON.stringify({ merge_method: method, sha: gate.headSha })
+  });
+  if (!result.merged) throw new Error(`GitHub did not merge PR #${prNumber}: ${result.message || 'unknown reason'}`);
+  return { ...result, repository, prNumber, gate: 'passed' };
 }
