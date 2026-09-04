@@ -1,6 +1,6 @@
 import { reviewTask } from '../src/review/basic.js';
 import { evaluateGate } from '../src/gate/default.js';
-import { createGitHubPR, githubPlan } from '../src/github/adapter.js';
+import { createGitHubPR, githubPlan, inspectGitHubPR, mergeGitHubPR } from '../src/github/adapter.js';
 
 const API = 'https://api.github.com';
 
@@ -90,7 +90,7 @@ export default async function handler(req, res) {
       const result = await getTaskFile(owner, repo, input.id);
       if (!result) { send(res, 404, { error: 'Task not found.' }); return; }
       const task = result.task;
-      if (['gated', 'pr_created', 'deployed'].includes(task.state) || ['executing', 'review'].includes(task.state)) {
+      if (['gated', 'pr_created', 'merged', 'deployed'].includes(task.state) || ['executing', 'review'].includes(task.state)) {
         send(res, 409, { error: `Task is already ${task.state}.`, task }); return;
       }
       const now = new Date().toISOString();
@@ -120,6 +120,39 @@ export default async function handler(req, res) {
       task.events.push({ type: 'github.pr.created', at: task.updatedAt, prNumber: githubResult.prNumber, url: githubResult.url, branch: githubResult.branch, source: 'zvelclaw-web' });
       const saved = await saveTask(owner, repo, task, result.sha, `task: create PR ${task.id}`);
       send(res, 200, { task, github: githubResult, commit: saved?.commit?.sha || null }); return;
+    }
+
+    if (action === 'check-pr') {
+      const result = await getTaskFile(owner, repo, input.id);
+      if (!result) { send(res, 404, { error: 'Task not found.' }); return; }
+      const task = result.task;
+      const prNumber = Number(task.github?.prNumber);
+      if (!Number.isInteger(prNumber) || prNumber < 1) { send(res, 409, { error: 'Task has no GitHub PR.', task }); return; }
+      const gate = await inspectGitHubPR(prNumber, `${owner}/${repo}`);
+      task.github = { ...(task.github || {}), gate };
+      task.updatedAt = new Date().toISOString();
+      task.events = Array.isArray(task.events) ? task.events : [];
+      task.events.push({ type: 'github.gate.checked', at: task.updatedAt, prNumber, passed: gate.passed, reason: gate.reason, source: 'zvelclaw-web' });
+      const saved = await saveTask(owner, repo, task, result.sha, `task: check PR gate ${task.id}`);
+      send(res, 200, { task, gate, commit: saved?.commit?.sha || null }); return;
+    }
+
+    if (action === 'merge-pr') {
+      const result = await getTaskFile(owner, repo, input.id);
+      if (!result) { send(res, 404, { error: 'Task not found.' }); return; }
+      const task = result.task;
+      const prNumber = Number(task.github?.prNumber);
+      if (!Number.isInteger(prNumber) || prNumber < 1) { send(res, 409, { error: 'Task has no GitHub PR.', task }); return; }
+      const method = ['squash', 'merge', 'rebase'].includes(input.method) ? input.method : 'squash';
+      const gate = await inspectGitHubPR(prNumber, `${owner}/${repo}`);
+      if (!gate.passed) { send(res, 409, { error: `Merge blocked by Gate: ${gate.reason}`, task, gate }); return; }
+      const merged = await mergeGitHubPR(prNumber, `${owner}/${repo}`, method);
+      task.github = { ...(task.github || {}), gate, merged: true, mergeMethod: method, mergeSha: merged.sha };
+      task.state = 'merged'; task.updatedAt = new Date().toISOString();
+      task.events = Array.isArray(task.events) ? task.events : [];
+      task.events.push({ type: 'github.pr.merged', at: task.updatedAt, prNumber, method, sha: merged.sha, source: 'zvelclaw-web' });
+      const saved = await saveTask(owner, repo, task, result.sha, `task: merge PR ${task.id}`);
+      send(res, 200, { task, merged, gate, commit: saved?.commit?.sha || null }); return;
     }
 
     const description = String(input.description || '').trim();
