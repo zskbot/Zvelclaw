@@ -4,7 +4,8 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { readConfig, writeConfig, stateDir } from './config.js';
 import { runPipeline } from './pipeline.js';
-import { inspectGitHubPR, mergeGitHubPR } from './github/adapter.js';
+import { inspectGitHubPR, mergeGitHubPR, getGitHubPR } from './github/adapter.js';
+import { deploymentPlan, triggerDeployment } from './deploy/adapter.js';
 
 const VERSION = '0.2.0';
 const args = process.argv.slice(2);
@@ -12,7 +13,7 @@ const command = args[0] ?? 'help';
 const rest = args.slice(1);
 const repository = process.env.GITHUB_REPOSITORY || 'zskbot/Zvelclaw';
 
-const help = () => console.log(`Zvelclaw ${VERSION}\n\nAI-native developer CLI\n\nUsage:\n  zvelclaw <command> [options]\n\nCommands:\n  init                     Initialize a Zvelclaw workspace\n  doctor                   Check local prerequisites\n  task <description>      Run Task → Executor → Review → Gate → GitHub → Deploy\n  gate <pr>                Evaluate GitHub PR reviews, CI, and review comments\n  merge <pr> [method]      Merge only when the GitHub Gate passes (squash|merge|rebase)\n  run <command> [args...]  Execute a local command\n  config                   Show configuration\n  config set key=value     Set configuration\n  version                  Print version\n  help                     Show this help\n`);
+const help = () => console.log(`Zvelclaw ${VERSION}\n\nAI-native developer CLI\n\nUsage:\n  zvelclaw <command> [options]\n\nCommands:\n  init                     Initialize a Zvelclaw workspace\n  doctor                   Check local prerequisites\n  task <description>      Run Task → Executor → Review → Gate → GitHub → Deploy\n  gate <pr>                Evaluate GitHub PR reviews, CI, and review comments\n  merge <pr> [method]      Merge only when the GitHub Gate passes (squash|merge|rebase)\n  deploy <pr>              Deploy only an already-merged PR through the deployment workflow\n  run <command> [args...]  Execute a local command\n  config                   Show configuration\n  config set key=value     Set configuration\n  version                  Print this help\n  help                     Show this help\n`);
 
 function printGate(gate) {
   console.log(`PR         #${gate.prNumber}`);
@@ -85,6 +86,21 @@ async function main() {
       const merged = await mergeGitHubPR(prNumber, repository, method);
       console.log(`MERGE      ${merged.merged ? 'success' : 'failed'}`);
       console.log(`COMMIT     ${merged.sha}`);
+      break;
+    }
+    case 'deploy': {
+      const prNumber = Number(rest[0]);
+      if (!Number.isInteger(prNumber) || prNumber < 1) throw new Error('Expected: zvelclaw deploy <pr-number>');
+      const pr = await getGitHubPR(prNumber, repository);
+      if (!pr.merged) throw new Error(`Deployment blocked: PR #${prNumber} is not merged.`);
+      const task = { id: `pr-${prNumber}`, description: pr.title };
+      const plan = deploymentPlan(task);
+      const deployment = await triggerDeployment(task, plan, pr.merge_commit_sha || 'main');
+      console.log(`DEPLOY     ${deployment.triggered ? 'dispatched' : 'skipped'}`);
+      console.log(`PROVIDER   ${deployment.provider}`);
+      console.log(`ENV        ${deployment.environment}`);
+      console.log(`WORKFLOW   ${deployment.workflow}`);
+      if (deployment.reason) console.log(`REASON     ${deployment.reason}`);
       break;
     }
     case 'run': {
