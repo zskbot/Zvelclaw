@@ -75,3 +75,62 @@ export async function triggerDeployment(task, plan = deploymentPlan(task), ref =
     status: 'dispatched'
   };
 }
+
+export async function inspectDeployment(task, plan = deploymentPlan(task)) {
+  if (plan.provider !== 'github-actions') {
+    throw new Error(`Unsupported deployment provider: ${plan.provider}`);
+  }
+  if (!process.env.GITHUB_TOKEN) {
+    return { ...plan, skipped: true, reason: 'GITHUB_TOKEN is not configured' };
+  }
+
+  const { owner, repo } = splitRepo(plan.repository);
+  const workflowPath = encodeURIComponent(plan.workflow);
+  const runs = await github(
+    `/repos/${owner}/${repo}/actions/workflows/${workflowPath}/runs?per_page=20`
+  );
+
+  const dispatchedAt = task.deployment?.dispatchedAt
+    ? new Date(task.deployment.dispatchedAt).getTime()
+    : 0;
+
+  const candidates = (runs.workflow_runs || [])
+    .filter(run => {
+      const createdAt = new Date(run.created_at || 0).getTime();
+      return run.event === 'workflow_dispatch' && createdAt >= dispatchedAt;
+    })
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+  const run = candidates[0];
+
+  if (!run) {
+    return {
+      ...plan,
+      status: 'dispatched',
+      state: 'deploying',
+      run: null
+    };
+  }
+
+  let state = 'deploying';
+  if (run.status === 'completed') {
+    state = run.conclusion === 'success' ? 'deployed' : 'deploy_failed';
+  }
+
+  return {
+    ...plan,
+    status: run.status,
+    conclusion: run.conclusion,
+    state,
+    run: {
+      id: run.id,
+      name: run.name,
+      status: run.status,
+      conclusion: run.conclusion,
+      htmlUrl: run.html_url,
+      createdAt: run.created_at,
+      updatedAt: run.updated_at,
+      runNumber: run.run_number
+    }
+  };
+}
