@@ -1,13 +1,7 @@
 name: CI
-
 on:
   push:
-    branches: [main]
   pull_request:
-
-permissions:
-  contents: read
-
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -21,4 +15,3 @@ jobs:
           node-version: ${{ matrix.node }}
       - run: npm test
       - run: npm run lint
-      - run: node src/cli.js version

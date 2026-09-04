@@ -1,10 +1,7 @@
 node_modules/
-.npm/
-.DS_Store
+.zvelclaw/
 .env
 .env.*
 !.env.example
-.zvelclaw/
 coverage/
-dist/
-*.log
+.DS_Store
