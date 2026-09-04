@@ -91,7 +91,7 @@ export async function inspectGitHubPR(prNumber, repository = repoName()) {
   const pr = await github(`/repos/${owner}/${repo}/pulls/${prNumber}`);
   const reviews = await github(`/repos/${owner}/${repo}/pulls/${prNumber}/reviews`);
   const checks = await github(`/repos/${owner}/${repo}/commits/${pr.head.sha}/check-runs?per_page=100`);
-  const threads = await github(`/repos/${owner}/${repo}/pulls/${prNumber}/comments?per_page=100`);
+  const comments = await github(`/repos/${owner}/${repo}/pulls/${prNumber}/comments?per_page=100`);
 
   const latestByUser = new Map();
   for (const review of reviews) {
@@ -103,14 +103,14 @@ export async function inspectGitHubPR(prNumber, repository = repoName()) {
   const checkRuns = checks.check_runs || [];
   const completed = checkRuns.length > 0 && checkRuns.every(check => check.status === 'completed');
   const checksPassed = completed && checkRuns.every(check => ['success', 'skipped', 'neutral'].includes(check.conclusion));
-  const unresolvedComments = (threads || []).filter(comment => comment.in_reply_to_id == null && comment.body).length;
+  const commentCount = Array.isArray(comments) ? comments.filter(comment => comment.body).length : 0;
 
   const reasons = [];
   if (pr.state !== 'open') reasons.push(`PR is ${pr.state}.`);
   if (pr.draft) reasons.push('PR is still draft.');
   if (!approved) reasons.push('No approved GitHub review.');
   if (changesRequested) reasons.push('A reviewer requested changes.');
-  if (unresolvedComments) reasons.push(`${unresolvedComments} PR review comment(s) require resolution.`);
+  if (commentCount) reasons.push(`${commentCount} inline review comment(s) remain; resolve or address them before merge.`);
   if (!checkRuns.length) reasons.push('No CI checks are reported for the PR head commit.');
   else if (!completed) reasons.push('CI checks are not complete.');
   else if (!checksPassed) reasons.push('One or more CI checks did not pass.');
@@ -124,7 +124,7 @@ export async function inspectGitHubPR(prNumber, repository = repoName()) {
     approved,
     changesRequested,
     checks: checkRuns.map(check => ({ name: check.name, status: check.status, conclusion: check.conclusion })),
-    unresolvedComments,
+    unresolvedComments: commentCount,
     reason: reasons.length ? reasons.join(' ') : 'GitHub PR gate passed.'
   };
 }
