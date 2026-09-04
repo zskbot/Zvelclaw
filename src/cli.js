@@ -12,7 +12,7 @@ const rest = args.slice(1);
 
 const help = () => console.log(`Zvelclaw ${VERSION}\n\nAI-native developer CLI\n\nUsage:\n  zvelclaw <command> [options]\n\nCommands:\n  init                     Initialize a Zvelclaw workspace\n  doctor                   Check local prerequisites\n  task <description>      Run Task → Executor → Review → Gate → GitHub → Deploy\n  run <command> [args...]  Execute a local command\n  config                   Show configuration\n  config set key=value     Set configuration\n  version                  Print version\n  help                     Show this help\n`);
 
-function main() {
+async function main() {
   switch (command) {
     case 'help': case '--help': case '-h': help(); break;
     case 'version': case '--version': console.log(VERSION); break;
@@ -41,12 +41,14 @@ function main() {
     case 'task': {
       const description = rest.join(' ').trim();
       if (!description) throw new Error('A task description is required.');
-      const result = runPipeline(description);
+      const result = await runPipeline(description);
       console.log(`TASK       ${result.task.id}`);
-      console.log(`EXECUTOR   local / ready`);
+      console.log('EXECUTOR   local / ready');
       console.log(`REVIEW     ${result.review.approved ? 'approved' : 'rejected'}`);
       console.log(`GATE       ${result.gate.passed ? 'passed' : 'blocked'}`);
-      if (result.github) console.log(`GITHUB     branch ${result.github.branch}`);
+      if (result.github?.branch) console.log(`GITHUB     branch ${result.github.branch}`);
+      if (result.github?.url) console.log(`PR         ${result.github.url}`);
+      if (result.github?.skipped) console.log(`GITHUB     skipped: ${result.github.reason}`);
       if (result.deployment) console.log(`DEPLOY     ${result.deployment.provider} / ${result.deployment.environment}`);
       if (!result.gate.passed) process.exitCode = 2;
       break;
@@ -61,4 +63,4 @@ function main() {
   }
 }
 
-try { main(); } catch (error) { console.error(`error: ${error.message}`); process.exitCode = 1; }
+main().catch((error) => { console.error(`error: ${error.message}`); process.exitCode = 1; });
