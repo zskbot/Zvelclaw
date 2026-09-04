@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Codespaces — Zvelclaw</title>
+  <link rel="stylesheet" href="../app.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    .space-list{display:grid;gap:14px}
+    .space-card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:18px;align-items:center}
+    .space-name{font-size:1.1rem;font-weight:700;margin:0 0 6px}
+    .space-meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+    .space-meta span{font:500 .76rem 'IBM Plex Mono',monospace;border:1px solid var(--line);padding:5px 8px;border-radius:999px}
+    .space-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+    .status-dot{display:inline-flex;align-items:center;gap:7px}
+    .status-dot::before{content:'';width:8px;height:8px;border-radius:50%;background:currentColor}
+    .create-panel{display:grid;grid-template-columns:1.4fr 1fr 1fr auto;gap:12px;align-items:end}
+    .create-panel label{display:grid;gap:7px;font-size:.8rem;font-weight:600}
+    .create-panel select{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:inherit;font:inherit}
+    @media(max-width:760px){.space-card,.create-panel{grid-template-columns:1fr}.space-actions{justify-content:flex-start}}
+  </style>
+</head>
+<body>
+  <nav class="topbar">
+    <button class="menu-btn" data-menu aria-expanded="false" aria-label="Mở menu" type="button"><span class="hamb"><i></i><i></i><i></i></span></button>
+    <a class="brand" href="../"><span class="brand-mark">⌁</span>Zvelclaw</a>
+    <span class="page-title">Codespaces</span>
+  </nav>
+
+  <aside class="drawer">
+    <div class="drawer-head">ZVELCLAW / NAVIGATION</div>
+    <a href="new.html"><span class="ico">01</span>Mới</a>
+    <a href="projects.html"><span class="ico">02</span>Dự án</a>
+    <a href="artifacts.html"><span class="ico">03</span>Cổ vật</a>
+    <a href="codes.html"><span class="ico">04</span>Mã số</a>
+    <a href="customize.html"><span class="ico">05</span>Tùy chỉnh</a>
+    <a href="design.html"><span class="ico">06</span>Thiết kế</a>
+    <a class="active" href="codespaces.html" aria-current="page"><span class="ico">08</span>Codespaces</a>
+    <a href="settings.html"><span class="ico">07</span>Cài đặt</a>
+  </aside>
+
+  <main class="shell">
+    <section class="hero">
+      <div class="eyebrow">08 · CODESPACES</div>
+      <h1>Cloud development, ngay trong Zvelclaw.</h1>
+      <p class="lead">Giao diện lấy cảm hứng từ GitHub Codespaces: chọn repository, branch và cấu hình máy rồi mở một development workspace.</p>
+      <div class="toolbar">
+        <a class="btn primary" href="#create">New codespace →</a>
+        <a class="btn" href="projects.html">Xem project</a>
+      </div>
+    </section>
+
+    <section class="section" id="create">
+      <div class="eyebrow">CREATE · WORKSPACE</div>
+      <div class="card">
+        <div class="create-panel">
+          <label>Repository
+            <select id="repo"><option>zskbot/Zvelclaw</option></select>
+          </label>
+          <label>Branch
+            <select id="branch"><option>main</option><option>develop</option></select>
+          </label>
+          <label>Machine
+            <select id="machine"><option>2 core · 8 GB</option><option>4 core · 16 GB</option><option>8 core · 32 GB</option></select>
+          </label>
+          <button class="btn primary" id="create" type="button">Create codespace</button>
+        </div>
+        <p class="mono" id="result" role="status" aria-live="polite">Workspace chưa được tạo.</p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="eyebrow">YOUR CODESPACES</div>
+      <div class="space-list">
+        <article class="card space-card">
+          <div>
+            <h2 class="space-name">zvelclaw-main</h2>
+            <p><span class="status-dot">Ready</span> · Development workspace cho Zvelclaw.</p>
+            <div class="space-meta"><span>zskbot/Zvelclaw</span><span>main</span><span>2 core · 8 GB</span></div>
+          </div>
+          <div class="space-actions"><button class="btn primary" type="button" data-open>Open codespace →</button><button class="btn" type="button" data-stop>Stop</button></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="grid">
+        <article class="card"><div class="num">REPOSITORY</div><h2>zskbot/Zvelclaw</h2><p>Workspace gắn với repository hiện tại.</p></article>
+        <article class="card"><div class="num">ENVIRONMENT</div><h2>Isolated</h2><p>Mỗi Codespace là một development environment riêng.</p></article>
+        <article class="card"><div class="num">STATUS</div><h2>READY</h2><p>UI đã sẵn sàng cho lớp executor/runtime thật.</p></article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer"><span>Zvelclaw · Codespaces</span><span>Cloud development workspace</span></footer>
+  <script src="../app.js"></script>
+  <script>
+    (() => {
+      const result = document.querySelector('#result');
+      const create = document.querySelector('#create');
+      create.addEventListener('click', () => {
+        const repo = document.querySelector('#repo').value;
+        const branch = document.querySelector('#branch').value;
+        const machine = document.querySelector('#machine').value;
+        result.textContent = `READY · ${repo} · ${branch} · ${machine} · Codespace provisioning layer chưa được kết nối.`;
+      });
+      document.querySelector('[data-open]').addEventListener('click', () => { result.textContent = 'OPEN · Development workspace sẽ mở khi runtime Codespaces được kết nối.'; });
+      document.querySelector('[data-stop]').addEventListener('click', (event) => { event.currentTarget.textContent = 'Stopped'; result.textContent = 'STOPPED · zvelclaw-main'; });
+    })();
+  </script>
+</body>
+</html>
