@@ -1,0 +1,1 @@
+function toggleMenu(){document.querySelector('.drawer')?.classList.toggle('open')}document.addEventListener('click',e=>{const drawer=document.querySelector('.drawer');if(!drawer)return;if(e.target.closest('[data-menu]')){toggleMenu();return}if(drawer.classList.contains('open')&&!e.target.closest('.drawer'))drawer.classList.remove('open')});
