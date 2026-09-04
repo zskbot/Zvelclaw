@@ -1,0 +1,13 @@
+curl -X PUT \
+	"https://api.cloudflare.com/client/v4/zones/b82d7ca9d3484f0c56d961e8a7a856da/rulesets/phases/http_request_firewall_custom/entrypoint" \
+	-H "Authorization: Bearer $CF_AUTH_TOKEN" \
+	-d '{
+    "rules": [
+        {
+            "description": "Zvelclaw",
+            "expression": "(http.request.method eq \"POST\" and http.request.uri.path eq \"/admin\")",
+            "action": "managed_challenge",
+            "enabled": true
+        }
+    ]
+}'
