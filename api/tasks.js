@@ -31,6 +31,19 @@ async function github(path, options = {}) {
   return body;
 }
 
+async function getTask(owner, repo, id) {
+  const safeId = String(id || '').trim();
+  if (!/^[a-zA-Z0-9_-]+$/.test(safeId)) throw new Error('Invalid task id.');
+  try {
+    const file = await github(`/repos/${owner}/${repo}/contents/.zvelclaw/tasks/${encodeURIComponent(safeId)}.json`);
+    const content = Buffer.from(file.content || '', 'base64').toString('utf8');
+    return JSON.parse(content);
+  } catch (error) {
+    if (/not found/i.test(error.message)) return null;
+    throw error;
+  }
+}
+
 async function listTasks(owner, repo) {
   let entries;
   try {
@@ -68,6 +81,18 @@ export default async function handler(req, res) {
     if (!owner || !repo) throw new Error('Invalid GITHUB_REPOSITORY.');
 
     if (req.method === 'GET') {
+      const query = req.query || {};
+      const id = typeof query.id === 'string' ? query.id : '';
+      if (id) {
+        const task = await getTask(owner, repo, id);
+        if (!task) {
+          send(res, 404, { error: 'Task not found.' });
+          return;
+        }
+        send(res, 200, { task, repository: `${owner}/${repo}` });
+        return;
+      }
+
       const tasks = await listTasks(owner, repo);
       send(res, 200, { tasks, count: tasks.length, repository: `${owner}/${repo}` });
       return;
