@@ -20,6 +20,7 @@
     .create-panel{display:grid;grid-template-columns:1.4fr 1fr 1fr auto;gap:12px;align-items:end}
     .create-panel label{display:grid;gap:7px;font-size:.8rem;font-weight:600}
     .create-panel select{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:inherit;font:inherit}
+    .muted{opacity:.7}
     @media(max-width:760px){.space-card,.create-panel{grid-template-columns:1fr}.space-actions{justify-content:flex-start}}
   </style>
 </head>
@@ -46,7 +47,7 @@
     <section class="hero">
       <div class="eyebrow">08 · CODESPACES</div>
       <h1>Cloud development, ngay trong Zvelclaw.</h1>
-      <p class="lead">Giao diện lấy cảm hứng từ GitHub Codespaces: chọn repository, branch và cấu hình máy rồi mở một development workspace.</p>
+      <p class="lead">Giao diện hiện tại của Zvelclaw được giữ nguyên. Lớp Codespaces bên dưới kết nối trực tiếp GitHub để chọn repository, branch, machine, provision và mở workspace thật.</p>
       <div class="toolbar">
         <a class="btn primary" href="#create">New codespace →</a>
         <a class="btn" href="projects.html">Xem project</a>
@@ -58,39 +59,30 @@
       <div class="card">
         <div class="create-panel">
           <label>Repository
-            <select id="repo"><option>zskbot/Zvelclaw</option></select>
+            <select id="repo" disabled><option>Loading…</option></select>
           </label>
           <label>Branch
-            <select id="branch"><option>main</option><option>develop</option></select>
+            <select id="branch" disabled><option>Loading…</option></select>
           </label>
           <label>Machine
-            <select id="machine"><option>2 core · 8 GB</option><option>4 core · 16 GB</option><option>8 core · 32 GB</option></select>
+            <select id="machine" disabled><option>Loading…</option></select>
           </label>
-          <button class="btn primary" id="create" type="button">Create codespace</button>
+          <button class="btn primary" id="create" type="button" disabled>Create codespace</button>
         </div>
-        <p class="mono" id="result" role="status" aria-live="polite">Workspace chưa được tạo.</p>
+        <p class="mono" id="result" role="status" aria-live="polite">Đang tải repository, branch và machine từ GitHub…</p>
       </div>
     </section>
 
     <section class="section">
       <div class="eyebrow">YOUR CODESPACES</div>
-      <div class="space-list">
-        <article class="card space-card">
-          <div>
-            <h2 class="space-name">zvelclaw-main</h2>
-            <p><span class="status-dot">Ready</span> · Development workspace cho Zvelclaw.</p>
-            <div class="space-meta"><span>zskbot/Zvelclaw</span><span>main</span><span>2 core · 8 GB</span></div>
-          </div>
-          <div class="space-actions"><button class="btn primary" type="button" data-open>Open codespace →</button><button class="btn" type="button" data-stop>Stop</button></div>
-        </article>
-      </div>
+      <div class="space-list" id="spaces"><article class="card"><p class="muted">Đang tải Codespaces…</p></article></div>
     </section>
 
     <section class="section">
       <div class="grid">
-        <article class="card"><div class="num">REPOSITORY</div><h2>zskbot/Zvelclaw</h2><p>Workspace gắn với repository hiện tại.</p></article>
+        <article class="card"><div class="num">REPOSITORY</div><h2 id="repo-summary">—</h2><p>Repository được lấy trực tiếp từ backend GitHub.</p></article>
         <article class="card"><div class="num">ENVIRONMENT</div><h2>Isolated</h2><p>Mỗi Codespace là một development environment riêng.</p></article>
-        <article class="card"><div class="num">STATUS</div><h2>READY</h2><p>UI đã sẵn sàng cho lớp executor/runtime thật.</p></article>
+        <article class="card"><div class="num">STATUS</div><h2 id="status-summary">LOADING</h2><p>Trạng thái được đồng bộ từ GitHub Codespaces.</p></article>
       </div>
     </section>
   </main>
@@ -99,16 +91,122 @@
   <script src="../app.js"></script>
   <script>
     (() => {
-      const result = document.querySelector('#result');
+      const api = '/api/codespaces';
+      const repoSelect = document.querySelector('#repo');
+      const branchSelect = document.querySelector('#branch');
+      const machineSelect = document.querySelector('#machine');
       const create = document.querySelector('#create');
-      create.addEventListener('click', () => {
-        const repo = document.querySelector('#repo').value;
-        const branch = document.querySelector('#branch').value;
-        const machine = document.querySelector('#machine').value;
-        result.textContent = `READY · ${repo} · ${branch} · ${machine} · Codespace provisioning layer chưa được kết nối.`;
+      const result = document.querySelector('#result');
+      const spaces = document.querySelector('#spaces');
+      const repoSummary = document.querySelector('#repo-summary');
+      const statusSummary = document.querySelector('#status-summary');
+      let repository;
+
+      const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
+      const stateLabel = state => ({Available:'Ready', Starting:'Starting', Provisioning:'Provisioning', ShuttingDown:'Stopping', Shutdown:'Stopped', Archived:'Archived'}[state] || state || 'Unknown');
+
+      function renderSpaces(items) {
+        if (!items.length) {
+          spaces.innerHTML = '<article class="card"><p class="muted">Chưa có Codespace nào cho repository này.</p></article>';
+          statusSummary.textContent = 'READY';
+          return;
+        }
+        spaces.innerHTML = items.map(space => `
+          <article class="card space-card" data-space="${escapeHtml(space.name)}">
+            <div>
+              <h2 class="space-name">${escapeHtml(space.displayName || space.name)}</h2>
+              <p><span class="status-dot">${escapeHtml(stateLabel(space.state))}</span> · ${escapeHtml(space.name)}</p>
+              <div class="space-meta"><span>${escapeHtml(space.repository || repository.fullName)}</span><span>${escapeHtml(space.ref || '—')}</span><span>${escapeHtml(space.machine?.display_name || space.machine || '—')}</span></div>
+            </div>
+            <div class="space-actions">
+              ${space.webUrl ? `<a class="btn primary" target="_blank" rel="noreferrer" href="${escapeHtml(space.webUrl)}">Open codespace →</a>` : ''}
+              ${space.state === 'Shutdown' ? `<button class="btn" type="button" data-action="start">Start</button>` : `<button class="btn" type="button" data-action="stop">Stop</button>`}
+              <button class="btn" type="button" data-action="refresh">Refresh</button>
+            </div>
+          </article>`).join('');
+      }
+
+      async function request(url, options) {
+        const response = await fetch(url, options);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+        return data;
+      }
+
+      async function load() {
+        try {
+          const data = await request(`${api}?action=bootstrap`);
+          repository = data.repository;
+          repoSummary.textContent = repository.fullName;
+          repoSelect.innerHTML = `<option value="${escapeHtml(repository.fullName)}">${escapeHtml(repository.fullName)}</option>`;
+          branchSelect.innerHTML = data.branches.map(branch => `<option value="${escapeHtml(branch.name)}"${branch.name === repository.defaultBranch ? ' selected' : ''}>${escapeHtml(branch.name)}</option>`).join('');
+          machineSelect.innerHTML = data.machines.map(machine => `<option value="${escapeHtml(machine.name)}">${escapeHtml(machine.displayName || machine.name)}</option>`).join('');
+          repoSelect.disabled = false; branchSelect.disabled = false; machineSelect.disabled = false; create.disabled = false;
+          renderSpaces(data.codespaces);
+          result.textContent = `READY · ${repository.fullName} · chọn branch và machine để provision.`;
+        } catch (error) {
+          result.textContent = `ERROR · ${error.message}`;
+          statusSummary.textContent = 'ERROR';
+        }
+      }
+
+      async function refreshSpace(name) {
+        const data = await request(`${api}?action=status&name=${encodeURIComponent(name)}`);
+        const card = spaces.querySelector(`[data-space="${CSS.escape(name)}"]`);
+        if (!card) return;
+        const current = data.codespace;
+        const status = card.querySelector('.status-dot');
+        if (status) status.textContent = stateLabel(current.state);
+        const actions = card.querySelector('.space-actions');
+        if (actions && current.webUrl) actions.innerHTML = `<a class="btn primary" target="_blank" rel="noreferrer" href="${escapeHtml(current.webUrl)}">Open codespace →</a><button class="btn" type="button" data-action="${current.state === 'Shutdown' ? 'start' : 'stop'}">${current.state === 'Shutdown' ? 'Start' : 'Stop'}</button><button class="btn" type="button" data-action="refresh">Refresh</button>`;
+        result.textContent = `STATUS · ${current.name} · ${stateLabel(current.state)}`;
+        statusSummary.textContent = stateLabel(current.state).toUpperCase();
+        return current;
+      }
+
+      create.addEventListener('click', async () => {
+        create.disabled = true;
+        result.textContent = 'PROVISIONING · GitHub đang tạo Codespace…';
+        try {
+          const data = await request(api, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action:'create', branch:branchSelect.value, machine:machineSelect.value, displayName:`zvelclaw-${branchSelect.value}` }) });
+          result.textContent = `PROVISIONING · ${data.codespace.name} · ${stateLabel(data.codespace.state)}`;
+          await refreshSpace(data.codespace.name).catch(() => {});
+          if (data.codespace.state !== 'Available') {
+            const timer = setInterval(async () => {
+              try {
+                const current = await refreshSpace(data.codespace.name);
+                if (!current || ['Available','Shutdown','Archived'].includes(current.state)) clearInterval(timer);
+              } catch { clearInterval(timer); }
+            }, 5000);
+          }
+        } catch (error) {
+          result.textContent = `ERROR · ${error.message}`;
+        } finally {
+          create.disabled = false;
+        }
       });
-      document.querySelector('[data-open]').addEventListener('click', () => { result.textContent = 'OPEN · Development workspace sẽ mở khi runtime Codespaces được kết nối.'; });
-      document.querySelector('[data-stop]').addEventListener('click', (event) => { event.currentTarget.textContent = 'Stopped'; result.textContent = 'STOPPED · zvelclaw-main'; });
+
+      spaces.addEventListener('click', async event => {
+        const button = event.target.closest('[data-action]');
+        if (!button) return;
+        const card = button.closest('[data-space]');
+        const name = card?.dataset.space;
+        if (!name) return;
+        const action = button.dataset.action;
+        button.disabled = true;
+        try {
+          if (action === 'refresh') await refreshSpace(name);
+          else {
+            result.textContent = `${action.toUpperCase()} · ${name}…`;
+            await request(api, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action, name}) });
+            await refreshSpace(name);
+          }
+        } catch (error) {
+          result.textContent = `ERROR · ${error.message}`;
+        } finally { button.disabled = false; }
+      });
+
+      load();
     })();
   </script>
 </body>
