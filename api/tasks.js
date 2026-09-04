@@ -1,3 +1,6 @@
+import { reviewTask } from '../src/review/basic.js';
+import { evaluateGate } from '../src/gate/default.js';
+
 const API = 'https://api.github.com';
 
 function repository() {
@@ -31,17 +34,31 @@ async function github(path, options = {}) {
   return body;
 }
 
-async function getTask(owner, repo, id) {
-  const safeId = String(id || '').trim();
-  if (!/^[a-zA-Z0-9_-]+$/.test(safeId)) throw new Error('Invalid task id.');
+function safeId(id) {
+  const value = String(id || '').trim();
+  if (!/^[a-zA-Z0-9_-]+$/.test(value)) throw new Error('Invalid task id.');
+  return value;
+}
+
+async function getTaskFile(owner, repo, id) {
+  const safe = safeId(id);
   try {
-    const file = await github(`/repos/${owner}/${repo}/contents/.zvelclaw/tasks/${encodeURIComponent(safeId)}.json`);
+    const file = await github(`/repos/${owner}/${repo}/contents/.zvelclaw/tasks/${encodeURIComponent(safe)}.json`);
     const content = Buffer.from(file.content || '', 'base64').toString('utf8');
-    return JSON.parse(content);
+    return { task: JSON.parse(content), sha: file.sha };
   } catch (error) {
     if (/not found/i.test(error.message)) return null;
     throw error;
   }
+}
+
+async function saveTask(owner, repo, task, sha, message) {
+  const path = `.zvelclaw/tasks/${safeId(task.id)}.json`;
+  const content = Buffer.from(`${JSON.stringify(task, null, 2)}\n`).toString('base64');
+  return github(`/repos/${owner}/${repo}/contents/${path}`, {
+    method: 'PUT',
+    body: JSON.stringify({ message, content, sha })
+  });
 }
 
 async function listTasks(owner, repo) {
@@ -54,7 +71,6 @@ async function listTasks(owner, repo) {
   }
 
   if (!Array.isArray(entries)) return [];
-
   const files = entries.filter((entry) => entry.type === 'file' && entry.name.endsWith('.json'));
   const tasks = await Promise.all(files.map(async (entry) => {
     try {
@@ -65,7 +81,6 @@ async function listTasks(owner, repo) {
       return null;
     }
   }));
-
   return tasks.filter(Boolean).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
 }
 
@@ -84,12 +99,12 @@ export default async function handler(req, res) {
       const query = req.query || {};
       const id = typeof query.id === 'string' ? query.id : '';
       if (id) {
-        const task = await getTask(owner, repo, id);
-        if (!task) {
+        const result = await getTaskFile(owner, repo, id);
+        if (!result) {
           send(res, 404, { error: 'Task not found.' });
           return;
         }
-        send(res, 200, { task, repository: `${owner}/${repo}` });
+        send(res, 200, { task: result.task, repository: `${owner}/${repo}` });
         return;
       }
 
@@ -104,9 +119,49 @@ export default async function handler(req, res) {
     }
 
     const input = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+    const action = String(input.action || 'create').toLowerCase();
+
+    if (action === 'execute') {
+      const result = await getTaskFile(owner, repo, input.id);
+      if (!result) {
+        send(res, 404, { error: 'Task not found.' });
+        return;
+      }
+
+      const task = result.task;
+      if (['gated', 'pr_created', 'deployed'].includes(task.state)) {
+        send(res, 409, { error: `Task is already ${task.state}.`, task });
+        return;
+      }
+      if (task.state === 'executing' || task.state === 'review') {
+        send(res, 409, { error: `Task is already ${task.state}.`, task });
+        return;
+      }
+
+      const now = new Date().toISOString();
+      task.state = 'executing';
+      task.updatedAt = now;
+      task.events = Array.isArray(task.events) ? task.events : [];
+      task.events.push({ type: 'executor.ready', at: now, executor: 'local', source: 'zvelclaw-web' });
+
+      const review = reviewTask(task);
+      task.review = review;
+      task.state = 'review';
+      task.events.push({ type: 'review.completed', at: new Date().toISOString(), ...review, source: 'zvelclaw-web' });
+
+      const gate = evaluateGate({ task, review });
+      task.gate = gate;
+      task.state = gate.passed ? 'gated' : 'failed';
+      task.updatedAt = new Date().toISOString();
+      task.events.push({ type: gate.passed ? 'gate.passed' : 'gate.rejected', at: task.updatedAt, ...gate, source: 'zvelclaw-web' });
+
+      const saved = await saveTask(owner, repo, task, result.sha, `task: execute ${task.id}`);
+      send(res, 200, { task, review, gate, commit: saved?.commit?.sha || null });
+      return;
+    }
+
     const description = String(input.description || '').trim();
     const executionMode = input.executionMode === 'review' ? 'review' : 'local';
-
     if (description.length < 8) {
       send(res, 400, { error: 'Task description must contain at least 8 characters.' });
       return;
