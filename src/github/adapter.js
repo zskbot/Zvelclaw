@@ -24,6 +24,13 @@ async function github(path, options = {}) {
   return body;
 }
 
+async function githubGraphql(query, variables = {}) {
+  const response = await fetch(`${API}/graphql`, { method: 'POST', headers: headers(), body: JSON.stringify({ query, variables }) });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok || body.errors?.length) throw new Error(body.errors?.map(error => error.message).join(' ') || `GitHub GraphQL request failed (${response.status})`);
+  return body.data;
+}
+
 function splitRepo(repository) {
   const [owner, repo] = repository.split('/');
   if (!owner || !repo || repository.split('/').length !== 2) throw new Error(`Invalid GITHUB_REPOSITORY: ${repository}`);
@@ -32,57 +39,28 @@ function splitRepo(repository) {
 
 export function githubPlan(task) {
   const branch = `zvelclaw/${task.id}`;
-  return {
-    provider: 'github',
-    repository: repoName(),
-    branch,
-    commitMessage: `feat: ${task.description}`,
-    pullRequest: { title: `Zvelclaw: ${task.description}`, base: 'main' }
-  };
+  return { provider: 'github', repository: repoName(), branch, commitMessage: `feat: ${task.description}`, pullRequest: { title: `Zvelclaw: ${task.description}`, base: 'main' } };
 }
 
-export function githubReady() {
-  return Boolean(process.env.GITHUB_TOKEN);
-}
+export function githubReady() { return Boolean(process.env.GITHUB_TOKEN); }
 
 export async function createGitHubPR(task, plan = githubPlan(task)) {
   if (!githubReady()) return { provider: 'github', skipped: true, reason: 'GITHUB_TOKEN is not configured' };
   const { owner, repo } = splitRepo(plan.repository);
   const base = await github(`/repos/${owner}/${repo}/git/ref/heads/${encodeURIComponent(plan.pullRequest.base)}`);
-  await github(`/repos/${owner}/${repo}/git/refs`, {
-    method: 'POST',
-    body: JSON.stringify({ ref: `refs/heads/${plan.branch}`, sha: base.object.sha })
-  });
-
+  await github(`/repos/${owner}/${repo}/git/refs`, { method: 'POST', body: JSON.stringify({ ref: `refs/heads/${plan.branch}`, sha: base.object.sha }) });
   const manifestPath = `.zvelclaw/tasks/${task.id}.json`;
-  const content = Buffer.from(JSON.stringify({
-    id: task.id,
-    description: task.description,
-    state: task.state,
-    source: 'zvelclaw'
-  }, null, 2) + '\n').toString('base64');
+  const content = Buffer.from(JSON.stringify({ id: task.id, description: task.description, state: task.state, source: 'zvelclaw' }, null, 2) + '\n').toString('base64');
+  await github(`/repos/${owner}/${repo}/contents/${manifestPath}`, { method: 'PUT', body: JSON.stringify({ message: plan.commitMessage, content, branch: plan.branch }) });
+  const pr = await github(`/repos/${owner}/${repo}/pulls`, { method: 'POST', body: JSON.stringify({ title: plan.pullRequest.title, body: `Created by Zvelclaw.\n\nTask: ${task.description}\nTask ID: ${task.id}\n\nPipeline: Task → Executor → Review → Gate → GitHub → PR`, head: plan.branch, base: plan.pullRequest.base, draft: true, maintainer_can_modify: true }) });
+  return { provider: 'github', repository: plan.repository, branch: plan.branch, prNumber: pr.number, url: pr.html_url, state: pr.state, draft: pr.draft ?? true };
+}
 
-  await github(`/repos/${owner}/${repo}/contents/${manifestPath}`, {
-    method: 'PUT',
-    body: JSON.stringify({ message: plan.commitMessage, content, branch: plan.branch })
-  });
-
-  const pr = await github(`/repos/${owner}/${repo}/pulls`, {
-    method: 'POST',
-    body: JSON.stringify({
-      title: plan.pullRequest.title,
-      body: `Created by Zvelclaw.\n\nTask: ${task.description}\nTask ID: ${task.id}\n\nPipeline: Task → Executor → Review → Gate → GitHub → PR`,
-      head: plan.branch,
-      base: plan.pullRequest.base,
-      draft: true,
-      maintainer_can_modify: true
-    })
-  });
-
-  return {
-    provider: 'github', repository: plan.repository, branch: plan.branch,
-    prNumber: pr.number, url: pr.html_url, state: pr.state, draft: pr.draft ?? true
-  };
+export async function markGitHubPRReady(prNumber, repository = repoName()) {
+  if (!githubReady()) throw new Error('GITHUB_TOKEN is required for GitHub integration.');
+  const { owner, repo } = splitRepo(repository);
+  const pr = await github(`/repos/${owner}/${repo}/pulls/${prNumber}`, { method: 'PATCH', body: JSON.stringify({ draft: false }) });
+  return { prNumber, state: pr.state, draft: pr.draft, url: pr.html_url };
 }
 
 export async function inspectGitHubPR(prNumber, repository = repoName()) {
@@ -91,42 +69,26 @@ export async function inspectGitHubPR(prNumber, repository = repoName()) {
   const pr = await github(`/repos/${owner}/${repo}/pulls/${prNumber}`);
   const reviews = await github(`/repos/${owner}/${repo}/pulls/${prNumber}/reviews`);
   const checks = await github(`/repos/${owner}/${repo}/commits/${pr.head.sha}/check-runs?per_page=100`);
-  const comments = await github(`/repos/${owner}/${repo}/pulls/${prNumber}/comments?per_page=100`);
-
+  const { repository: gqlRepo } = await githubGraphql(`query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved comments(first:1){nodes{body}}}}}}}`, { owner, name: repo, number: prNumber });
+  const threads = gqlRepo?.pullRequest?.reviewThreads?.nodes || [];
+  const unresolvedComments = threads.filter(thread => !thread.isResolved).length;
   const latestByUser = new Map();
-  for (const review of reviews) {
-    const login = review.user?.login;
-    if (login) latestByUser.set(login, review.state);
-  }
+  for (const review of reviews) { const login = review.user?.login; if (login) latestByUser.set(login, review.state); }
   const approved = [...latestByUser.values()].includes('APPROVED');
   const changesRequested = [...latestByUser.values()].includes('CHANGES_REQUESTED');
   const checkRuns = checks.check_runs || [];
   const completed = checkRuns.length > 0 && checkRuns.every(check => check.status === 'completed');
   const checksPassed = completed && checkRuns.every(check => ['success', 'skipped', 'neutral'].includes(check.conclusion));
-  const commentCount = Array.isArray(comments) ? comments.filter(comment => comment.body).length : 0;
-
   const reasons = [];
   if (pr.state !== 'open') reasons.push(`PR is ${pr.state}.`);
   if (pr.draft) reasons.push('PR is still draft.');
   if (!approved) reasons.push('No approved GitHub review.');
   if (changesRequested) reasons.push('A reviewer requested changes.');
-  if (commentCount) reasons.push(`${commentCount} inline review comment(s) remain; resolve or address them before merge.`);
+  if (unresolvedComments) reasons.push(`${unresolvedComments} unresolved review thread(s).`);
   if (!checkRuns.length) reasons.push('No CI checks are reported for the PR head commit.');
   else if (!completed) reasons.push('CI checks are not complete.');
   else if (!checksPassed) reasons.push('One or more CI checks did not pass.');
-
-  return {
-    passed: reasons.length === 0,
-    repository,
-    prNumber,
-    headSha: pr.head.sha,
-    draft: pr.draft,
-    approved,
-    changesRequested,
-    checks: checkRuns.map(check => ({ name: check.name, status: check.status, conclusion: check.conclusion })),
-    unresolvedComments: commentCount,
-    reason: reasons.length ? reasons.join(' ') : 'GitHub PR gate passed.'
-  };
+  return { passed: reasons.length === 0, repository, prNumber, headSha: pr.head.sha, draft: pr.draft, approved, changesRequested, checks: checkRuns.map(check => ({ name: check.name, status: check.status, conclusion: check.conclusion })), unresolvedComments, reason: reasons.length ? reasons.join(' ') : 'GitHub PR gate passed.' };
 }
 
 export async function getGitHubPR(prNumber, repository = repoName()) {
@@ -140,10 +102,7 @@ export async function mergeGitHubPR(prNumber, repository = repoName(), method = 
   const gate = await inspectGitHubPR(prNumber, repository);
   if (!gate.passed) throw new Error(`Merge blocked by Gate: ${gate.reason}`);
   const { owner, repo } = splitRepo(repository);
-  const result = await github(`/repos/${owner}/${repo}/pulls/${prNumber}/merge`, {
-    method: 'PUT',
-    body: JSON.stringify({ merge_method: method, sha: gate.headSha })
-  });
+  const result = await github(`/repos/${owner}/${repo}/pulls/${prNumber}/merge`, { method: 'PUT', body: JSON.stringify({ merge_method: method, sha: gate.headSha }) });
   if (!result.merged) throw new Error(`GitHub did not merge PR #${prNumber}: ${result.message || 'unknown reason'}`);
   return { ...result, repository, prNumber, gate: 'passed' };
 }
