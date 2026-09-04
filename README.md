@@ -1,63 +1,107 @@
-# Velclaw — Deploy Pages
+# Zvelclaw
 
-Trang tĩnh (GitHub Pages) giới thiệu **Velclaw** — workspace AI-native cho vòng đời phần mềm — và mô tả quy trình deploy thủ công của dự án.
+**AI-native software lifecycle CLI and execution workspace.**
 
-🔗 **Live:** [zskbot.github.io/velclaw-cli](https://zskbot.github.io/velclaw-cli/)
+Zvelclaw is a local-first command-line foundation for turning software work into an explicit lifecycle: **task → execute → review → gate → GitHub → deploy**.
 
-> Repo này chỉ chứa trang giới thiệu/tài liệu (`index.html`), **không phải** mã nguồn CLI hay sản phẩm Velclaw. Mã nguồn sản phẩm nằm ở repo riêng (private).
+## Status
 
----
+This repository is now the **public source-code repository for the Zvelclaw CLI**. It is intentionally small and dependency-light so the execution core can evolve without locking the project to a web framework.
 
-## Nội dung trang
+## Requirements
 
-Trang là một single-page app tĩnh với 2 khu vực, chuyển đổi bằng JS thuần (không reload):
+- Node.js 20+
+- Git (recommended for repository workflows)
 
-| Trang | Nội dung |
-|---|---|
-| **Tổng quan** | Giới thiệu Velclaw, 8 năng lực cốt lõi (AI Agents, Workspace, Build, Runtime, Storage, GitHub, Deployment, Developer UI), sơ đồ kiến trúc, stack công nghệ, quy trình từ issue đến deploy, lộ trình |
-| **Deploy** | Khung mô tả quy trình deploy thủ công qua SSH + Docker Compose lên VPS tự quản — dùng làm tài liệu tham khảo, các chỗ đánh dấu `<...>` cần điền giá trị thật khi áp dụng |
+## Install
 
-> ⚠️ Trang **Deploy** là tài liệu minh hoạ quy trình, không phải dashboard theo dõi deploy real-time.
-
-## Thiết kế
-
-- **Font:** [Space Grotesk](https://fonts.google.com/specimen/Space+Grotesk) (tiêu đề), [IBM Plex Sans](https://fonts.google.com/specimen/IBM+Plex+Sans) (nội dung), [IBM Plex Mono](https://fonts.google.com/specimen/IBM+Plex+Mono) (code/log)
-- **Bảng màu:** nền tối (`#12151b`), accent đỏ "claw" (`#ff4433`), accent vàng đồng "brass" (`#d4a537`)
-- **Không dùng framework/build step** — thuần HTML + CSS + JS trong một file duy nhất
-
-## Chạy thử ở local
-
-Không cần cài đặt gì, chỉ cần mở file trực tiếp hoặc serve tĩnh:
+From a checkout:
 
 ```bash
-git clone https://github.com/zskbot/velclaw-cli.git
-cd velclaw-cli
-# mở trực tiếp
-open index.html
-# hoặc serve qua http-server bất kỳ
-npx serve .
+npm install -g .
+zvelclaw version
 ```
 
-## Deploy
+Or run without installing:
 
-Trang được publish qua **GitHub Pages** từ nhánh `main`. Push lên `main` sẽ tự cập nhật trang live (xem `.github/workflows`).
-
-## Cấu trúc thư mục
-
+```bash
+node src/cli.js help
 ```
+
+## Quick start
+
+```bash
+mkdir my-project && cd my-project
+zvelclaw init
+zvelclaw doctor
+zvelclaw task "Implement authentication"
+zvelclaw run node --version
+```
+
+The workspace manifest is `zvelclaw.json`; local task state lives under `.zvelclaw/`.
+
+## CLI
+
+| Command | Purpose |
+|---|---|
+| `zvelclaw init [dir]` | Initialize a workspace |
+| `zvelclaw doctor` | Validate the local runtime |
+| `zvelclaw task <title>` | Create a lifecycle task |
+| `zvelclaw run <cmd> [args]` | Execute a local command |
+| `zvelclaw config` | Read local configuration |
+| `zvelclaw config set key=value` | Set local configuration |
+| `zvelclaw version` | Print version |
+
+## Architecture
+
+```text
+User / Agent
+    │
+    ▼
+Zvelclaw CLI
+    │
+    ├── Task Store
+    ├── Executor
+    ├── Review / Gate (next)
+    ├── GitHub Adapter (next)
+    └── Deployment Adapter (next)
+```
+
+### Product direction
+
+The CLI is the execution surface. Higher-level services can consume the same lifecycle primitives later:
+
+- **Task** — normalized unit of work
+- **Executor** — deterministic local execution boundary
+- **Review** — inspect generated changes and evidence
+- **Gate** — enforce policy before integration
+- **GitHub** — branch, commit, PR and status integration
+- **Deployment** — promote an approved artifact
+
+No credentials are committed to the repository. AI provider credentials are supplied through environment variables or an external secret manager.
+
+## Repository layout
+
+```text
 .
-├── .github/workflows/   # Workflow deploy GitHub Pages
-├── index.html           # Toàn bộ trang (landing + deploy-doc)
+├── src/
+│   └── cli.js          # Zvelclaw CLI entrypoint
+├── .github/workflows/  # CI
+├── Dockerfile          # Reproducible CLI container
+├── package.json
+├── .gitignore
 ├── LICENSE
 └── README.md
 ```
 
-## Đóng góp
+## Development
 
-Đây là trang giới thiệu công khai của một dự án private (`Velclaw/Velclaw`). Nếu bạn phát hiện lỗi hiển thị, nội dung sai, hoặc muốn đề xuất cải thiện trang, hãy mở [Issue](https://github.com/zskbot/velclaw-cli/issues).
+```bash
+npm test
+npm run lint
+node src/cli.js help
+```
 
-**Không commit credentials, API key hay token deploy vào repo này.**
+## License
 
-## Giấy phép
-
-Phát hành theo giấy phép [MIT](./LICENSE).
+MIT.
