@@ -4,14 +4,25 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { readConfig, writeConfig, stateDir } from './config.js';
 import { runPipeline } from './pipeline.js';
-import { inspectGitHubPR } from './github/adapter.js';
+import { inspectGitHubPR, mergeGitHubPR } from './github/adapter.js';
 
 const VERSION = '0.2.0';
 const args = process.argv.slice(2);
 const command = args[0] ?? 'help';
 const rest = args.slice(1);
+const repository = process.env.GITHUB_REPOSITORY || 'zskbot/Zvelclaw';
 
-const help = () => console.log(`Zvelclaw ${VERSION}\n\nAI-native developer CLI\n\nUsage:\n  zvelclaw <command> [options]\n\nCommands:\n  init                     Initialize a Zvelclaw workspace\n  doctor                   Check local prerequisites\n  task <description>      Run Task → Executor → Review → Gate → GitHub → Deploy\n  gate <pr>                Evaluate GitHub PR reviews, CI, and unresolved comments\n  run <command> [args...]  Execute a local command\n  config                   Show configuration\n  config set key=value     Set configuration\n  version                  Print version\n  help                     Show this help\n`);
+const help = () => console.log(`Zvelclaw ${VERSION}\n\nAI-native developer CLI\n\nUsage:\n  zvelclaw <command> [options]\n\nCommands:\n  init                     Initialize a Zvelclaw workspace\n  doctor                   Check local prerequisites\n  task <description>      Run Task → Executor → Review → Gate → GitHub → Deploy\n  gate <pr>                Evaluate GitHub PR reviews, CI, and review comments\n  merge <pr> [method]      Merge only when the GitHub Gate passes (squash|merge|rebase)\n  run <command> [args...]  Execute a local command\n  config                   Show configuration\n  config set key=value     Set configuration\n  version                  Print version\n  help                     Show this help\n`);
+
+function printGate(gate) {
+  console.log(`PR         #${gate.prNumber}`);
+  console.log(`REVIEW     ${gate.approved ? 'approved' : 'missing'}`);
+  console.log(`CHANGES    ${gate.changesRequested ? 'requested' : 'clear'}`);
+  console.log(`CI         ${gate.checks.length ? (gate.checks.every(check => ['success', 'skipped', 'neutral'].includes(check.conclusion)) && gate.checks.every(check => check.status === 'completed') ? 'passed' : 'blocked') : 'no checks'}`);
+  console.log(`COMMENTS   ${gate.unresolvedComments ? `${gate.unresolvedComments} unresolved` : 'clear'}`);
+  console.log(`GATE       ${gate.passed ? 'PASSED' : 'BLOCKED'}`);
+  console.log(`REASON     ${gate.reason}`);
+}
 
 async function main() {
   switch (command) {
@@ -57,15 +68,23 @@ async function main() {
     case 'gate': {
       const prNumber = Number(rest[0]);
       if (!Number.isInteger(prNumber) || prNumber < 1) throw new Error('Expected: zvelclaw gate <pr-number>');
-      const gate = await inspectGitHubPR(prNumber, process.env.GITHUB_REPOSITORY || 'zskbot/Zvelclaw');
-      console.log(`PR         #${gate.prNumber}`);
-      console.log(`REVIEW     ${gate.approved ? 'approved' : 'missing'}`);
-      console.log(`CHANGES    ${gate.changesRequested ? 'requested' : 'clear'}`);
-      console.log(`CI         ${gate.checks.length ? gate.checks.every(check => check.conclusion === 'success' || check.conclusion === 'skipped' || check.conclusion === 'neutral') && gate.checks.every(check => check.status === 'completed') ? 'passed' : 'blocked' : 'no checks'}`);
-      console.log(`COMMENTS   ${gate.unresolvedComments ? `${gate.unresolvedComments} unresolved` : 'clear'}`);
-      console.log(`GATE       ${gate.passed ? 'PASSED' : 'BLOCKED'}`);
-      console.log(`REASON     ${gate.reason}`);
+      const gate = await inspectGitHubPR(prNumber, repository);
+      printGate(gate);
       if (!gate.passed) process.exitCode = 2;
+      break;
+    }
+    case 'merge': {
+      const prNumber = Number(rest[0]);
+      const method = rest[1] || 'squash';
+      if (!Number.isInteger(prNumber) || prNumber < 1) throw new Error('Expected: zvelclaw merge <pr-number> [squash|merge|rebase]');
+      if (!['squash', 'merge', 'rebase'].includes(method)) throw new Error('Merge method must be squash, merge, or rebase.');
+      console.log(`GATE       checking PR #${prNumber}`);
+      const gate = await inspectGitHubPR(prNumber, repository);
+      printGate(gate);
+      if (!gate.passed) { process.exitCode = 2; break; }
+      const merged = await mergeGitHubPR(prNumber, repository, method);
+      console.log(`MERGE      ${merged.merged ? 'success' : 'failed'}`);
+      console.log(`COMMIT     ${merged.sha}`);
       break;
     }
     case 'run': {
