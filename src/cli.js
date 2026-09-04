@@ -1,39 +1,32 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { existsSync, mkdirSync } from 'node:fs';
+import { readConfig, writeConfig, stateDir } from './config.js';
+import { runPipeline } from './pipeline.js';
 
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 const args = process.argv.slice(2);
 const command = args[0] ?? 'help';
 const rest = args.slice(1);
-const stateDir = join(process.cwd(), '.zvelclaw');
-const configFile = join(stateDir, 'config.json');
 
-const help = () => console.log(`Zvelclaw ${VERSION}\n\nAI-native developer CLI\n\nUsage:\n  zvelclaw <command> [options]\n\nCommands:\n  init                     Initialize a Zvelclaw workspace\n  doctor                   Check local prerequisites\n  task <description>      Create/execute a task workflow\n  run <command> [args...]  Execute a local command\n  config                   Show configuration\n  config set key=value     Set configuration\n  version                  Print version\n  help                     Show this help\n`);
-
-const config = () => {
-  if (!existsSync(configFile)) return {};
-  try { return JSON.parse(readFileSync(configFile, 'utf8')); } catch { return {}; }
-};
+const help = () => console.log(`Zvelclaw ${VERSION}\n\nAI-native developer CLI\n\nUsage:\n  zvelclaw <command> [options]\n\nCommands:\n  init                     Initialize a Zvelclaw workspace\n  doctor                   Check local prerequisites\n  task <description>      Run Task → Executor → Review → Gate → GitHub → Deploy\n  run <command> [args...]  Execute a local command\n  config                   Show configuration\n  config set key=value     Set configuration\n  version                  Print version\n  help                     Show this help\n`);
 
 function main() {
   switch (command) {
     case 'help': case '--help': case '-h': help(); break;
     case 'version': case '--version': console.log(VERSION); break;
     case 'init':
-      mkdirSync(stateDir, { recursive: true });
-      if (!existsSync(configFile)) writeFileSync(configFile, JSON.stringify({ version: VERSION }, null, 2) + '\n');
-      console.log(`✓ initialized ${stateDir}`);
+      mkdirSync(stateDir(), { recursive: true });
+      if (!existsSync(`${stateDir()}/config.json`)) writeConfig({ version: VERSION, initializedAt: new Date().toISOString() });
+      console.log(`✓ initialized ${stateDir()}`);
       break;
     case 'doctor': {
-      const node = process.versions.node;
       const git = spawnSync('git', ['--version'], { encoding: 'utf8' });
-      console.log(`node  ${node}`);
-      console.log(`${git.status === 0 ? '✓' : '✗'} git ${git.status === 0 ? git.stdout.trim() : 'not found'}`);
-      console.log(`${existsSync('.git') ? '✓' : '·'} git repository`);
+      console.log(`node      ${process.versions.node}`);
+      console.log(`${git.status === 0 ? '✓' : '✗'} git       ${git.status === 0 ? git.stdout.trim() : 'not found'}`);
+      console.log(`${existsSync('.git') ? '✓' : '·'} workspace git repository`);
+      console.log(`${process.env.GITHUB_TOKEN ? '✓' : '·'} GitHub token ${process.env.GITHUB_TOKEN ? 'available' : 'not configured'}`);
       break;
     }
     case 'config':
@@ -41,20 +34,21 @@ function main() {
         const pair = rest.slice(1).join(' ');
         const index = pair.indexOf('=');
         if (index < 1) throw new Error('Expected: zvelclaw config set key=value');
-        mkdirSync(stateDir, { recursive: true });
-        const next = { ...config(), [pair.slice(0, index)]: pair.slice(index + 1) };
-        writeFileSync(configFile, JSON.stringify(next, null, 2) + '\n');
+        writeConfig({ ...readConfig(), [pair.slice(0, index)]: pair.slice(index + 1) });
         console.log('✓ configuration updated');
-      } else console.log(JSON.stringify(config(), null, 2));
+      } else console.log(JSON.stringify(readConfig(), null, 2));
       break;
     case 'task': {
       const description = rest.join(' ').trim();
       if (!description) throw new Error('A task description is required.');
-      console.log(`TASK      ${description}`);
-      console.log('EXECUTOR  ready');
-      console.log('REVIEW    pending');
-      console.log('GATE      pending');
-      console.log('GITHUB    pending');
+      const result = runPipeline(description);
+      console.log(`TASK       ${result.task.id}`);
+      console.log(`EXECUTOR   local / ready`);
+      console.log(`REVIEW     ${result.review.approved ? 'approved' : 'rejected'}`);
+      console.log(`GATE       ${result.gate.passed ? 'passed' : 'blocked'}`);
+      if (result.github) console.log(`GITHUB     branch ${result.github.branch}`);
+      if (result.deployment) console.log(`DEPLOY     ${result.deployment.provider} / ${result.deployment.environment}`);
+      if (!result.gate.passed) process.exitCode = 2;
       break;
     }
     case 'run': {
@@ -63,8 +57,7 @@ function main() {
       process.exitCode = result.status ?? 1;
       break;
     }
-    default:
-      throw new Error(`Unknown command: ${command}. Run "zvelclaw help".`);
+    default: throw new Error(`Unknown command: ${command}. Run "zvelclaw help".`);
   }
 }
 
