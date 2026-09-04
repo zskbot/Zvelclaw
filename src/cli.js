@@ -4,13 +4,14 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { readConfig, writeConfig, stateDir } from './config.js';
 import { runPipeline } from './pipeline.js';
+import { inspectGitHubPR } from './github/adapter.js';
 
 const VERSION = '0.2.0';
 const args = process.argv.slice(2);
 const command = args[0] ?? 'help';
 const rest = args.slice(1);
 
-const help = () => console.log(`Zvelclaw ${VERSION}\n\nAI-native developer CLI\n\nUsage:\n  zvelclaw <command> [options]\n\nCommands:\n  init                     Initialize a Zvelclaw workspace\n  doctor                   Check local prerequisites\n  task <description>      Run Task → Executor → Review → Gate → GitHub → Deploy\n  run <command> [args...]  Execute a local command\n  config                   Show configuration\n  config set key=value     Set configuration\n  version                  Print version\n  help                     Show this help\n`);
+const help = () => console.log(`Zvelclaw ${VERSION}\n\nAI-native developer CLI\n\nUsage:\n  zvelclaw <command> [options]\n\nCommands:\n  init                     Initialize a Zvelclaw workspace\n  doctor                   Check local prerequisites\n  task <description>      Run Task → Executor → Review → Gate → GitHub → Deploy\n  gate <pr>                Evaluate GitHub PR reviews, CI, and unresolved comments\n  run <command> [args...]  Execute a local command\n  config                   Show configuration\n  config set key=value     Set configuration\n  version                  Print version\n  help                     Show this help\n`);
 
 async function main() {
   switch (command) {
@@ -51,6 +52,20 @@ async function main() {
       if (result.github?.skipped) console.log(`GITHUB     skipped: ${result.github.reason}`);
       if (result.deployment) console.log(`DEPLOY     ${result.deployment.provider} / ${result.deployment.environment}`);
       if (!result.gate.passed) process.exitCode = 2;
+      break;
+    }
+    case 'gate': {
+      const prNumber = Number(rest[0]);
+      if (!Number.isInteger(prNumber) || prNumber < 1) throw new Error('Expected: zvelclaw gate <pr-number>');
+      const gate = await inspectGitHubPR(prNumber, process.env.GITHUB_REPOSITORY || 'zskbot/Zvelclaw');
+      console.log(`PR         #${gate.prNumber}`);
+      console.log(`REVIEW     ${gate.approved ? 'approved' : 'missing'}`);
+      console.log(`CHANGES    ${gate.changesRequested ? 'requested' : 'clear'}`);
+      console.log(`CI         ${gate.checks.length ? gate.checks.every(check => check.conclusion === 'success' || check.conclusion === 'skipped' || check.conclusion === 'neutral') && gate.checks.every(check => check.status === 'completed') ? 'passed' : 'blocked' : 'no checks'}`);
+      console.log(`COMMENTS   ${gate.unresolvedComments ? `${gate.unresolvedComments} unresolved` : 'clear'}`);
+      console.log(`GATE       ${gate.passed ? 'PASSED' : 'BLOCKED'}`);
+      console.log(`REASON     ${gate.reason}`);
+      if (!gate.passed) process.exitCode = 2;
       break;
     }
     case 'run': {
