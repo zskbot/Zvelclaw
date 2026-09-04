@@ -129,6 +129,12 @@ export async function inspectGitHubPR(prNumber, repository = repoName()) {
   };
 }
 
+export async function getGitHubPR(prNumber, repository = repoName()) {
+  if (!githubReady()) throw new Error('GITHUB_TOKEN is required for GitHub integration.');
+  const { owner, repo } = splitRepo(repository);
+  return github(`/repos/${owner}/${repo}/pulls/${prNumber}`);
+}
+
 export async function mergeGitHubPR(prNumber, repository = repoName(), method = 'squash') {
   if (!githubReady()) throw new Error('GITHUB_TOKEN is required for merge.');
   const gate = await inspectGitHubPR(prNumber, repository);
