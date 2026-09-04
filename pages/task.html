@@ -1,106 +1,13 @@
 <!doctype html>
 <html lang="vi">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Task — Zvelclaw</title>
-  <link rel="stylesheet" href="../app.css">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-</head>
-<body>
-<nav class="topbar">
-  <button class="menu-btn" data-menu aria-expanded="false" aria-label="Mở menu" type="button"><span class="hamb"><i></i><i></i><i></i></span></button>
-  <a class="brand" href="../"><span class="brand-mark">⌁</span> Zvelclaw</a>
-  <span class="page-title">Task</span>
-</nav>
-<aside class="drawer">
-  <div class="drawer-head">ZVELCLAW / NAVIGATION</div>
-  <a href="new.html"><span class="ico">01</span>Mới</a>
-  <a class="active" href="projects.html" aria-current="page"><span class="ico">02</span>Dự án</a>
-  <a href="artifacts.html"><span class="ico">03</span>Cổ vật</a>
-  <a href="codes.html"><span class="ico">04</span>Mã số</a>
-  <a href="customize.html"><span class="ico">05</span>Tùy chỉnh</a>
-  <a href="design.html"><span class="ico">06</span>Thiết kế</a>
-  <a href="settings.html"><span class="ico">07</span>Cài đặt</a>
-</aside>
-<main class="shell">
-<section class="hero">
-  <div class="eyebrow">TASK · DETAIL</div>
-  <h1 id="task-title">Đang tải task…</h1>
-  <p class="lead" id="task-id">Đang tải manifest từ GitHub.</p>
-  <div class="toolbar">
-    <a class="btn" href="projects.html">← Dự án</a>
-    <button class="btn primary" id="execute-task" type="button" disabled>Execute task →</button>
-    <button class="btn" id="create-pr" type="button" disabled>Create GitHub PR →</button>
-    <button class="btn" id="ready-pr" type="button" disabled>Ready for review →</button>
-    <button class="btn" id="check-pr" type="button" disabled>Check PR Gate →</button>
-    <button class="btn primary" id="merge-pr" type="button" disabled>Merge PR →</button>
-    <button class="btn primary" id="deploy-task" type="button" disabled>Deploy →</button>
-    <button class="btn" id="refresh-deployment" type="button" disabled>Refresh deployment →</button>
-    <a class="btn" href="new.html">Tạo task →</a>
-  </div>
-  <p class="mono" id="action-result" role="status" aria-live="polite"></p>
-</section>
-<section class="section"><div class="grid">
-  <article class="card"><div class="num">STATE</div><h2 id="state">—</h2><p>Trạng thái hiện tại của task.</p></article>
-  <article class="card"><div class="num">EXECUTOR</div><h2 id="execution-mode">—</h2><p>Chế độ thực thi được task chọn.</p></article>
-  <article class="card"><div class="num">PROJECT</div><h2 id="project">—</h2><p>Repository sở hữu task manifest.</p></article>
-</div></section>
-<section class="section"><div class="eyebrow">PIPELINE · LIFECYCLE</div><div id="pipeline" class="grid"></div></section>
-<section class="section"><div class="eyebrow">REVIEW · GATE · GITHUB · DEPLOY</div><div class="grid">
-  <article class="card"><div class="num">REVIEW</div><h2 id="review-status">PENDING</h2><p id="review-detail">Chưa chạy review.</p></article>
-  <article class="card"><div class="num">GATE</div><h2 id="gate-status">PENDING</h2><p id="gate-detail">Chưa đánh giá gate.</p></article>
-  <article class="card"><div class="num">GITHUB</div><h2 id="github-status">PENDING</h2><p id="github-detail">PR chưa được tạo.</p></article>
-  <article class="card"><div class="num">DEPLOY</div><h2 id="deployment-status">PENDING</h2><p id="deployment-detail">Chưa triển khai.</p></article>
-</div></section>
-<section class="section"><div class="eyebrow">MANIFEST · EVENTS</div><div id="events" class="list"><div class="empty">Đang tải events...</div></div></section>
-</main>
-<footer class="footer"><span>Zvelclaw · Task</span><span id="created-at">Created · —</span></footer>
-<script src="../app.js"></script>
-<script>
-(() => {
-  const id = new URLSearchParams(location.search).get('id');
-  const $ = s => document.querySelector(s);
-  const title=$('#task-title'), taskId=$('#task-id'), state=$('#state'), mode=$('#execution-mode'), project=$('#project'), pipeline=$('#pipeline'), events=$('#events'), createdAt=$('#created-at');
-  const execute=$('#execute-task'), createPr=$('#create-pr'), readyPr=$('#ready-pr'), checkPr=$('#check-pr'), mergePr=$('#merge-pr'), deploy=$('#deploy-task'), refresh=$('#refresh-deployment'), result=$('#action-result');
-  const reviewStatus=$('#review-status'), reviewDetail=$('#review-detail'), gateStatus=$('#gate-status'), gateDetail=$('#gate-detail'), githubStatus=$('#github-status'), githubDetail=$('#github-detail'), deploymentStatus=$('#deployment-status'), deploymentDetail=$('#deployment-detail');
-  const escapeHtml=v=>String(v??'').replace(/[&<>'\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','\"':'&quot;'}[c]));
-  const date=v=>{if(!v)return 'unknown';const d=new Date(v);return Number.isNaN(d.getTime())?v:d.toLocaleString('vi-VN');};
-  const stages=[['created','Task created'],['executing','Executor'],['review','Review'],['gated','Gate'],['pr_created','GitHub PR'],['merged','Merge'],['deploying','Deploying'],['deployed','Deploy']];
-  const rank={created:0,executing:1,review:2,gated:3,pr_created:4,merged:5,deploying:6,deployed:7};
-  let currentTask=null;
-
-  function render(task){
-    currentTask=task;
-    const active=String(task.state||'created').toLowerCase();
-    title.textContent=task.description||'Untitled task'; taskId.textContent=task.id||id; state.textContent=active.toUpperCase(); mode.textContent=task.executionMode||'local'; project.textContent=task.project||'—'; createdAt.textContent=`Created · ${date(task.createdAt)}`;
-    pipeline.innerHTML=stages.map(([key,label])=>{const done=key===active||(rank[active]!==undefined&&rank[key]<rank[active]);const failed=active==='failed'&&key!=='created';const status=failed?'BLOCKED':done?'DONE':'PENDING';return `<article class="card"><div class="num">${escapeHtml(key.toUpperCase())}</div><h2>${escapeHtml(label)}</h2><p>${status}</p><span class="badge">${status}</span></article>`;}).join('');
-    const review=task.review; reviewStatus.textContent=review?(review.approved?'APPROVED':'REJECTED'):'PENDING'; reviewDetail.textContent=review?(review.issues?.length?review.issues.join(' '):'Deterministic review passed.'):'Chưa chạy review.';
-    const gate=task.gate; gateStatus.textContent=gate?(gate.passed?'PASSED':'BLOCKED'):'PENDING'; gateDetail.textContent=gate?.reason||'Chưa đánh giá gate.';
-    const github=task.github, prGate=github?.gate; githubStatus.textContent=github?.prNumber?`PR #${github.prNumber}${github.merged?' · MERGED':''}`:'PENDING'; githubDetail.innerHTML=github?.url?`<a href="${escapeHtml(github.url)}" target="_blank" rel="noreferrer">Mở GitHub PR →</a><br><small>${escapeHtml(github.branch||'')}${prGate?` · Gate: ${prGate.passed?'PASSED':'BLOCKED'}`:''}</small>`:'PR chưa được tạo.';
-    const deployment=task.deployment;
-    if(!deployment){deploymentStatus.textContent=active==='merged'?'READY':'PENDING';deploymentDetail.textContent=active==='merged'?'Task đã merge và sẵn sàng deploy.':'Chưa triển khai.';}
-    else {const displayState=deployment.state||deployment.status||active;deploymentStatus.textContent=String(displayState).toUpperCase();const details=[];if(deployment.environment)details.push(`Environment: ${deployment.environment}`);if(deployment.workflow)details.push(`Workflow: ${deployment.workflow}`);if(deployment.ref)details.push(`Ref: ${deployment.ref}`);if(deployment.status)details.push(`Status: ${deployment.status}`);if(deployment.conclusion)details.push(`Conclusion: ${deployment.conclusion}`);if(deployment.run?.runNumber)details.push(`Run #${deployment.run.runNumber}`);deploymentDetail.innerHTML=`${details.length?escapeHtml(details.join(' · ')):'Deployment đã được dispatch.'}${deployment.run?.htmlUrl?`<br><a href="${escapeHtml(deployment.run.htmlUrl)}" target="_blank" rel="noreferrer">Mở GitHub Actions run →</a>`:''}`;}
-    execute.disabled=!['created','failed'].includes(active); execute.textContent=active==='failed'?'Retry task →':'Execute task →'; createPr.disabled=active!=='gated'||Boolean(github?.prNumber); readyPr.disabled=!github?.prNumber||github?.draft===false||active==='merged'; checkPr.disabled=!github?.prNumber||active==='merged'; mergePr.disabled=!github?.prNumber||active==='merged'; mergePr.textContent=active==='merged'?'PR merged':'Merge PR →';
-    deploy.disabled=active!=='merged'; deploy.textContent=active==='deployed'?'Deployed':active==='deploying'?'Deploying…':'Deploy →';
-    refresh.disabled=!task.deployment?.dispatchedAt; refresh.textContent=active==='deploying'?'Refresh deployment →':'Refresh deployment →';
-    const list=Array.isArray(task.events)?task.events:[]; events.innerHTML=list.length?list.map(e=>`<article class="row"><div><strong>${escapeHtml(e.type||'event')}</strong><small>${escapeHtml(date(e.at))} · ${escapeHtml(e.source||'zvelclaw')}</small></div><span class="badge">EVENT</span></article>`).join(''):'<div class="empty">Chưa có event.</div>';
-  }
-  async function load(){const r=await fetch(`/api/tasks?id=${encodeURIComponent(id)}`,{headers:{Accept:'application/json'}});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||`HTTP ${r.status}`);render(d.task);return d.task;}
-  async function post(action,extra={}){const r=await fetch('/api/tasks',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({action,id,...extra})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||`HTTP ${r.status}`);return d;}
-  async function run(button,action,message,success){button.disabled=true;result.textContent=message;try{const d=await post(action);result.textContent=success(d);render(d.task);}catch(e){result.textContent=`ERROR · ${e.message}`;if(currentTask)render(currentTask);else button.disabled=false;}}
-  if(!id){title.textContent='Thiếu task ID';taskId.textContent='URL cần có dạng task.html?id=<task-id>.';events.innerHTML='<div class="empty">Không có task ID để tải.</div>';pipeline.innerHTML='';return;}
-  load().catch(e=>{title.textContent='Không tải được task';taskId.textContent=id;events.innerHTML=`<div class="empty">${escapeHtml(e.message)}</div>`;pipeline.innerHTML='';});
-  execute.onclick=()=>run(execute,'execute','EXECUTING · Đang chạy Executor → Review → Gate...',d=>`EXECUTED · ${String(d.task.state||'').toUpperCase()}`);
-  createPr.onclick=()=>run(createPr,'create-pr','GITHUB · Đang tạo branch + Draft PR...',d=>`PR CREATED · #${d.github.prNumber}`);
-  readyPr.onclick=()=>run(readyPr,'ready-pr','GITHUB · Đang chuyển Draft PR sang Ready for review...',d=>`PR READY · #${d.ready.prNumber}`);
-  checkPr.onclick=()=>run(checkPr,'check-pr','GATE · Đang kiểm tra review + CI + resolved threads...',d=>`PR GATE · ${d.gate.passed?'PASSED':'BLOCKED'} · ${d.gate.reason}`);
-  mergePr.onclick=()=>run(mergePr,'merge-pr','MERGE · Đang kiểm tra Gate và merge PR...',d=>`MERGED · PR #${d.task.github.prNumber} · ${d.task.github.mergeSha}`);
-  deploy.onclick=()=>run(deploy,'deploy-task','DEPLOY · Đang dispatch GitHub Actions deploy.yml...',d=>`DEPLOY DISPATCHED · ${d.deployment.workflow} · ${d.deployment.environment}`);
-  refresh.onclick=async()=>{refresh.disabled=true;result.textContent='DEPLOY · Đang kiểm tra workflow run trên GitHub Actions...';try{const d=await post('deployment-status');const dep=d.deployment;result.textContent=dep.state==='deployed'?`DEPLOYED · Run #${dep.run?.runNumber||'—'}`:dep.state==='deploy_failed'?`DEPLOY FAILED · ${dep.conclusion||'unknown'}`:`DEPLOY STATUS · ${dep.status||'dispatched'} · Chưa hoàn tất`;render(d.task);}catch(e){result.textContent=`DEPLOY STATUS ERROR · ${e.message}`;refresh.disabled=false;}};
-})();
-</script>
-</body>
-</html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Task — Zvelclaw</title><link rel="stylesheet" href="../app.css"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"></head>
+<body><nav class="topbar"><button class="menu-btn" data-menu aria-expanded="false" aria-label="Mở menu" type="button"><span class="hamb"><i></i><i></i><i></i></span></button><a class="brand" href="../"><span class="brand-mark">⌁</span> Zvelclaw</a><span class="page-title">Task</span></nav><aside class="drawer"><div class="drawer-head">ZVELCLAW / NAVIGATION</div><a href="new.html"><span class="ico">01</span>Mới</a><a class="active" href="projects.html" aria-current="page"><span class="ico">02</span>Dự án</a><a href="artifacts.html"><span class="ico">03</span>Cổ vật</a><a href="codes.html"><span class="ico">04</span>Mã số</a><a href="customize.html"><span class="ico">05</span>Tùy chỉnh</a><a href="design.html"><span class="ico">06</span>Thiết kế</a><a href="settings.html"><span class="ico">07</span>Cài đặt</a></aside>
+<main class="shell"><section class="hero"><div class="eyebrow">TASK · DETAIL</div><h1 id="task-title">Đang tải task…</h1><p class="lead" id="task-id">Đang tải manifest từ GitHub.</p><div class="toolbar"><a class="btn" href="projects.html">← Dự án</a><button class="btn primary" id="execute-task" type="button" disabled>Execute task →</button><button class="btn" id="create-pr" type="button" disabled>Create GitHub PR →</button><button class="btn" id="ready-pr" type="button" disabled>Ready for review →</button><button class="btn" id="check-pr" type="button" disabled>Check PR Gate →</button><button class="btn primary" id="merge-pr" type="button" disabled>Merge PR →</button><button class="btn primary" id="deploy-task" type="button" disabled>Deploy →</button><button class="btn" id="refresh-deployment" type="button" disabled>Refresh deployment →</button><button class="btn" id="retry-deployment" type="button" disabled>Retry deployment →</button><a class="btn" href="new.html">Tạo task →</a></div><p class="mono" id="action-result" role="status" aria-live="polite"></p></section>
+<section class="section"><div class="grid"><article class="card"><div class="num">STATE</div><h2 id="state">—</h2><p>Trạng thái hiện tại của task.</p></article><article class="card"><div class="num">EXECUTOR</div><h2 id="execution-mode">—</h2><p>Chế độ thực thi được task chọn.</p></article><article class="card"><div class="num">PROJECT</div><h2 id="project">—</h2><p>Repository sở hữu task manifest.</p></article></div></section>
+<section class="section"><div class="eyebrow">PIPELINE · LIFECYCLE</div><div id="pipeline" class="grid"></div></section><section class="section"><div class="eyebrow">REVIEW · GATE · GITHUB · DEPLOY</div><div class="grid"><article class="card"><div class="num">REVIEW</div><h2 id="review-status">PENDING</h2><p id="review-detail">Chưa chạy review.</p></article><article class="card"><div class="num">GATE</div><h2 id="gate-status">PENDING</h2><p id="gate-detail">Chưa đánh giá gate.</p></article><article class="card"><div class="num">GITHUB</div><h2 id="github-status">PENDING</h2><p id="github-detail">PR chưa được tạo.</p></article><article class="card"><div class="num">DEPLOY</div><h2 id="deployment-status">PENDING</h2><p id="deployment-detail">Chưa triển khai.</p></article></div></section><section class="section"><div class="eyebrow">MANIFEST · EVENTS</div><div id="events" class="list"><div class="empty">Đang tải events...</div></div></section></main><footer class="footer"><span>Zvelclaw · Task</span><span id="created-at">Created · —</span></footer>
+<script src="../app.js"></script><script>
+(()=>{const id=new URLSearchParams(location.search).get('id'),$=s=>document.querySelector(s);const title=$('#task-title'),taskId=$('#task-id'),state=$('#state'),mode=$('#execution-mode'),project=$('#project'),pipeline=$('#pipeline'),events=$('#events'),createdAt=$('#created-at');const execute=$('#execute-task'),createPr=$('#create-pr'),readyPr=$('#ready-pr'),checkPr=$('#check-pr'),mergePr=$('#merge-pr'),deploy=$('#deploy-task'),refresh=$('#refresh-deployment'),retry=$('#retry-deployment'),result=$('#action-result');const reviewStatus=$('#review-status'),reviewDetail=$('#review-detail'),gateStatus=$('#gate-status'),gateDetail=$('#gate-detail'),githubStatus=$('#github-status'),githubDetail=$('#github-detail'),deploymentStatus=$('#deployment-status'),deploymentDetail=$('#deployment-detail');const escapeHtml=v=>String(v??'').replace(/[&<>'\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','\"':'&quot;'}[c]));const date=v=>{if(!v)return'unknown';const d=new Date(v);return Number.isNaN(d.getTime())?v:d.toLocaleString('vi-VN')};const stages=[['created','Task created'],['executing','Executor'],['review','Review'],['gated','Gate'],['pr_created','GitHub PR'],['merged','Merge'],['deploying','Deploying'],['deployed','Deploy']],rank={created:0,executing:1,review:2,gated:3,pr_created:4,merged:5,deploying:6,deployed:7};let currentTask=null;
+function render(task){currentTask=task;const active=String(task.state||'created').toLowerCase();title.textContent=task.description||'Untitled task';taskId.textContent=task.id||id;state.textContent=active.toUpperCase();mode.textContent=task.executionMode||'local';project.textContent=task.project||'—';createdAt.textContent=`Created · ${date(task.createdAt)}`;pipeline.innerHTML=stages.map(([key,label])=>{const done=key===active||(rank[active]!==undefined&&rank[key]<rank[active]);const failed=active==='failed'&&key!=='created';const status=failed?'BLOCKED':done?'DONE':'PENDING';return`<article class="card"><div class="num">${escapeHtml(key.toUpperCase())}</div><h2>${escapeHtml(label)}</h2><p>${status}</p><span class="badge">${status}</span></article>`}).join('');const review=task.review;reviewStatus.textContent=review?(review.approved?'APPROVED':'REJECTED'):'PENDING';reviewDetail.textContent=review?(review.issues?.length?review.issues.join(' '):'Deterministic review passed.'):'Chưa chạy review.';const gate=task.gate;gateStatus.textContent=gate?(gate.passed?'PASSED':'BLOCKED'):'PENDING';gateDetail.textContent=gate?.reason||'Chưa đánh giá gate.';const github=task.github,prGate=github?.gate;githubStatus.textContent=github?.prNumber?`PR #${github.prNumber}${github.merged?' · MERGED':''}`:'PENDING';githubDetail.innerHTML=github?.url?`<a href="${escapeHtml(github.url)}" target="_blank" rel="noreferrer">Mở GitHub PR →</a><br><small>${escapeHtml(github.branch||'')}${prGate?` · Gate: ${prGate.passed?'PASSED':'BLOCKED'}`:''}</small>`:'PR chưa được tạo.';const deployment=task.deployment;if(!deployment){deploymentStatus.textContent=active==='merged'?'READY':'PENDING';deploymentDetail.textContent=active==='merged'?'Task đã merge và sẵn sàng deploy.':'Chưa triển khai.'}else{const displayState=deployment.state||deployment.status||active;deploymentStatus.textContent=String(displayState).toUpperCase();const details=[];if(deployment.environment)details.push(`Environment: ${deployment.environment}`);if(deployment.workflow)details.push(`Workflow: ${deployment.workflow}`);if(deployment.ref)details.push(`Ref: ${deployment.ref}`);if(deployment.status)details.push(`Status: ${deployment.status}`);if(deployment.conclusion)details.push(`Conclusion: ${deployment.conclusion}`);if(deployment.retryCount)details.push(`Retries: ${deployment.retryCount}`);if(deployment.run?.runNumber)details.push(`Run #${deployment.run.runNumber}`);deploymentDetail.innerHTML=`${details.length?escapeHtml(details.join(' · ')):'Deployment đã được dispatch.'}${deployment.run?.htmlUrl?`<br><a href="${escapeHtml(deployment.run.htmlUrl)}" target="_blank" rel="noreferrer">Mở GitHub Actions run →</a>`:''}`}execute.disabled=!['created','failed'].includes(active);execute.textContent=active==='failed'?'Retry task →':'Execute task →';createPr.disabled=active!=='gated'||Boolean(github?.prNumber);readyPr.disabled=!github?.prNumber||github?.draft===false||active==='merged';checkPr.disabled=!github?.prNumber||active==='merged';mergePr.disabled=!github?.prNumber||active==='merged';deploy.disabled=active!=='merged';deploy.textContent=active==='deploying'?'Deploying…':active==='deployed'?'Deployed':'Deploy →';refresh.disabled=!task.deployment?.dispatchedAt;retry.disabled=active!=='deploy_failed';events.innerHTML=Array.isArray(task.events)&&task.events.length?task.events.map(e=>`<article class="row"><div><strong>${escapeHtml(e.type||'event')}</strong><small>${escapeHtml(date(e.at))} · ${escapeHtml(e.source||'zvelclaw')}</small></div><span class="badge">EVENT</span></article>`).join(''):'<div class="empty">Chưa có event.</div>'}
+async function load(){const r=await fetch(`/api/tasks?id=${encodeURIComponent(id)}`,{headers:{Accept:'application/json'}}),d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||`HTTP ${r.status}`);render(d.task);return d.task}async function post(action,extra={}){const r=await fetch('/api/tasks',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({action,id,...extra})}),d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||`HTTP ${r.status}`);return d}async function run(button,action,message,success){button.disabled=true;result.textContent=message;try{const d=await post(action);result.textContent=success(d);render(d.task)}catch(e){result.textContent=`ERROR · ${e.message}`;render(currentTask)}}
+if(!id){title.textContent='Thiếu task ID';taskId.textContent='URL cần có dạng task.html?id=<task-id>.';events.innerHTML='<div class="empty">Không có task ID để tải.</div>';pipeline.innerHTML='';return}load().catch(e=>{title.textContent='Không tải được task';taskId.textContent=id;events.innerHTML=`<div class="empty">${escapeHtml(e.message)}</div>`;pipeline.innerHTML=''});execute.onclick=()=>run(execute,'execute','EXECUTING · Đang chạy Executor → Review → Gate...',d=>`EXECUTED · ${String(d.task.state||'').toUpperCase()}`);createPr.onclick=()=>run(createPr,'create-pr','GITHUB · Đang tạo branch + Draft PR...',d=>`PR CREATED · #${d.github.prNumber}`);readyPr.onclick=()=>run(readyPr,'ready-pr','GITHUB · Đang chuyển Draft PR sang Ready for review...',d=>`PR READY · #${d.ready.prNumber}`);checkPr.onclick=()=>run(checkPr,'check-pr','GATE · Đang kiểm tra review + CI + resolved threads...',d=>`PR GATE · ${d.gate.passed?'PASSED':'BLOCKED'} · ${d.gate.reason}`);mergePr.onclick=()=>run(mergePr,'merge-pr','MERGE · Đang kiểm tra Gate và merge PR...',d=>`MERGED · PR #${d.task.github.prNumber} · ${d.task.github.mergeSha}`);deploy.onclick=()=>run(deploy,'deploy-task','DEPLOY · Đang dispatch GitHub Actions deploy.yml...',d=>`DEPLOY DISPATCHED · ${d.deployment.workflow} · ${d.deployment.environment}`);refresh.onclick=()=>run(refresh,'deployment-status','DEPLOY · Đang kiểm tra workflow run trên GitHub Actions...',d=>d.deployment.state==='deployed'?`DEPLOYED · Run #${d.deployment.run?.runNumber||'—'}`:d.deployment.state==='deploy_failed'?`DEPLOY FAILED · ${d.deployment.conclusion||'unknown'}`:`DEPLOY STATUS · ${d.deployment.status||'dispatched'} · Chưa hoàn tất`);retry.onclick=()=>run(retry,'retry-deploy','DEPLOY · Đang retry GitHub Actions deployment...',d=>`DEPLOY RETRIED · Attempt #${d.deployment.retryCount} · ${d.deployment.workflow}`)})();
+</script></body></html>
