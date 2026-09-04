@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Docs — Velclaw</title>
+<meta name="description" content="Tài liệu kỹ thuật: bắt đầu nhanh, kiến trúc, quy trình deploy, câu hỏi thường gặp.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M3 20L9 4M9 20L13 6M13 20L18 5M18 20L21 12' stroke='%23ff4433' stroke-width='2.4' stroke-linecap='square'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/theme.css">
+<link rel="stylesheet" href="assets/css/docs.css">
+</head>
+<body>
+
+<nav class="topnav">
+  <a class="brand" href="index.html">
+    <svg viewBox="0 0 24 24" fill="none"><path d="M3 20L9 4M9 20L13 6M13 20L18 5M18 20L21 12" stroke="#ff4433" stroke-width="2" stroke-linecap="square"/></svg>
+    velclaw
+  </a>
+  <div class="navlinks">
+    <a href="index.html">Tổng quan</a>
+    <a href="hub.html">Hub</a>
+    <a href="docs.html">Docs</a>
+    <a href="deploy.html">Deploy</a>
+  </div>
+</nav>
+
+<div class="docs-wrap">
+
+  <aside class="docs-side">
+    <input class="search" type="text" placeholder="Tìm trong tài liệu…" disabled>
+    <div class="grp">
+      <div class="grp-k">Bắt đầu</div>
+      <a href="#gioi-thieu" class="doc-link">Giới thiệu</a>
+      <a href="#bat-dau-nhanh" class="doc-link">Bắt đầu nhanh</a>
+    </div>
+    <div class="grp">
+      <div class="grp-k">Kiến trúc</div>
+      <a href="#kien-truc" class="doc-link">Tổng quan kiến trúc</a>
+      <a href="#stack" class="doc-link">Stack công nghệ</a>
+    </div>
+    <div class="grp">
+      <div class="grp-k">Vận hành</div>
+      <a href="#deploy" class="doc-link">Quy trình Deploy</a>
+      <a href="#checklist" class="doc-link">Checklist trước deploy</a>
+    </div>
+    <div class="grp">
+      <div class="grp-k">Khác</div>
+      <a href="#faq" class="doc-link">Câu hỏi thường gặp</a>
+      <a href="#dong-gop" class="doc-link">Đóng góp</a>
+    </div>
+  </aside>
+
+  <main class="docs-content">
+    <div class="docs-eyebrow">Tài liệu · Velclaw</div>
+    <h1>Tài liệu Velclaw</h1>
+    <p class="lead">Hướng dẫn kỹ thuật cho workspace Velclaw và các bề mặt liên quan trong repo này — từ cách chạy local đến quy trình deploy production. Xem thêm toàn bộ app/dự án con tại <a href="hub.html" style="color:var(--brass); text-decoration:underline;">trang Hub</a>.</p>
+
+    <section id="gioi-thieu">
+      <h2>Giới thiệu</h2>
+      <p>Velclaw là không gian làm việc AI-native cho vòng đời phần mềm, gom 8 mảng: AI Agents, Workspace, Build, Runtime, Storage, GitHub, Deployment và Developer UI vào một nơi duy nhất.</p>
+      <div class="callout">
+        <span>ⓘ</span>
+        <span>Repo <code>velclaw-cli</code> này chỉ chứa trang giới thiệu/tài liệu tĩnh (GitHub Pages). Mã nguồn sản phẩm Velclaw nằm ở repo riêng, private.</span>
+      </div>
+    </section>
+
+    <section id="bat-dau-nhanh">
+      <h2>Bắt đầu nhanh</h2>
+      <p>Chạy thử site tài liệu này ở local, không cần cài đặt gì ngoài một trình duyệt hoặc static server bất kỳ:</p>
+      <pre><code>git clone https://github.com/zskbot/velclaw-cli.git
+cd velclaw-cli
+npx serve .</code></pre>
+      <p>Để phát triển sản phẩm Velclaw (repo riêng, cần quyền truy cập):</p>
+      <pre><code>git clone https://github.com/Velclaw/Velclaw.git
+cd Velclaw &amp;&amp; npm install
+npm run dev</code></pre>
+    </section>
+
+    <section id="kien-truc">
+      <h2>Tổng quan kiến trúc</h2>
+      <p>AI Agents kết nối tới workspace trung tâm; workspace điều phối các mảng còn lại: Projects &amp; Files, Build &amp; Runtime, Storage, GitHub, Deployment.</p>
+      <pre><code> ┌─────────────────────────┐
+ │        AI AGENTS         │
+ │  models · tools · tasks  │
+ └────────────┬────────────┘
+              │
+              ▼
+┌──────────────────┐   ┌─────────────────────────┐   ┌──────────────────┐
+│ Projects &amp; Files  │◄──│    VELCLAW WORKSPACE    │──►│  Build &amp; Runtime  │
+└──────────────────┘   └────────────┬────────────┘   └──────────────────┘
+                        ┌───────────┼───────────┐
+                        ▼           ▼           ▼
+                  ┌─────────┐ ┌──────────┐ ┌─────────────┐
+                  │ Storage │ │  GitHub  │ │  Deployment  │
+                  └─────────┘ └──────────┘ └─────────────┘</code></pre>
+    </section>
+
+    <section id="stack">
+      <h2>Stack công nghệ</h2>
+      <table class="docs-table">
+        <thead><tr><th>Lớp</th><th>Công nghệ</th></tr></thead>
+        <tbody>
+          <tr><td>Framework</td><td>Next.js</td></tr>
+          <tr><td>UI</td><td>React</td></tr>
+          <tr><td>Ngôn ngữ</td><td>TypeScript</td></tr>
+          <tr><td>Runtime</td><td>Node.js</td></tr>
+          <tr><td>Style</td><td>Tailwind CSS</td></tr>
+          <tr><td>Database</td><td>PostgreSQL</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="deploy">
+      <h2>Quy trình Deploy</h2>
+      <p>Deploy production chạy thủ công qua SSH, dùng <strong>GitHub Container Registry (ghcr.io)</strong> để lưu image và <strong>docker run</strong> trực tiếp trên VPS (không dùng compose), phía trước là <strong>Nginx + Certbot</strong> làm reverse proxy/SSL.</p>
+      <h3>1. Build &amp; push image</h3>
+      <pre><code>docker build -t ghcr.io/&lt;owner&gt;/&lt;image&gt;:&lt;tag&gt; .
+echo $GHCR_TOKEN | docker login ghcr.io -u &lt;owner&gt; --password-stdin
+docker push ghcr.io/&lt;owner&gt;/&lt;image&gt;:&lt;tag&gt;</code></pre>
+      <h3>2. Pull &amp; chạy container trên VPS</h3>
+      <pre><code>ssh &lt;user&gt;@&lt;vps-host&gt; "docker pull ghcr.io/&lt;owner&gt;/&lt;image&gt;:&lt;tag&gt;"
+ssh &lt;user&gt;@&lt;vps-host&gt; "docker stop &lt;container-name&gt; &amp;&amp; docker rm &lt;container-name&gt;"
+ssh &lt;user&gt;@&lt;vps-host&gt; "docker run -d --name &lt;container-name&gt; \
+  --restart unless-stopped -p &lt;port&gt;:&lt;port&gt; \
+  --env-file &lt;path-to-env&gt; ghcr.io/&lt;owner&gt;/&lt;image&gt;:&lt;tag&gt;"</code></pre>
+      <h3>3. Reload Nginx &amp; health check</h3>
+      <pre><code>ssh &lt;user&gt;@&lt;vps-host&gt; "nginx -t &amp;&amp; systemctl reload nginx"
+curl -sSf https://&lt;domain&gt;/health</code></pre>
+      <div class="callout warn">
+        <span>⚠</span>
+        <span><b>Lưu ý:</b> đây là runbook thủ công, không có rollback tự động. Nếu health check thất bại, chạy lại <code>docker run</code> với <code>&lt;tag&gt;</code> của bản trước đó.</span>
+      </div>
+      <p>Xem bản trình bày trực quan (stepper + log mẫu) tại <a href="deploy.html" style="color:var(--brass); text-decoration:underline;">trang Deploy</a>.</p>
+    </section>
+
+    <section id="checklist">
+      <h2>Checklist trước khi deploy</h2>
+      <ul>
+        <li>Đã chạy <code>npm run build</code> &amp; type-check không lỗi</li>
+        <li>Token <code>GHCR_TOKEN</code> trên VPS còn hạn, đủ quyền <code>read:packages</code></li>
+        <li>File <code>--env-file</code> trên VPS đã cập nhật biến môi trường mới</li>
+        <li>Tên container &amp; port khớp với <code>proxy_pass</code> trong config Nginx</li>
+        <li>Đã backup volume dữ liệu nếu image mới có migration</li>
+        <li>Certbot còn hạn — kiểm tra bằng <code>certbot renew --dry-run</code></li>
+      </ul>
+    </section>
+
+    <section id="faq">
+      <h2>Câu hỏi thường gặp</h2>
+      <h3>Trang này có phải mã nguồn Velclaw không?</h3>
+      <p>Không. Đây là site tĩnh (GitHub Pages) giới thiệu và tài liệu hoá. Mã nguồn sản phẩm nằm ở repo private <code>Velclaw/Velclaw</code>.</p>
+      <h3>Trang Deploy có tự động chạy không?</h3>
+      <p>Không, đó là tài liệu minh hoạ quy trình thủ công, không kết nối tới hệ thống deploy thật.</p>
+      <h3>Làm sao đóng góp cho các app trong Hub còn ở trạng thái "kế hoạch"?</h3>
+      <p>Các mục đó hiện là placeholder. Theo dõi <a href="hub.html" style="color:var(--brass); text-decoration:underline;">trang Hub</a> hoặc mở Issue để đề xuất.</p>
+    </section>
+
+    <section id="dong-gop">
+      <h2>Đóng góp</h2>
+      <p>Phát hiện lỗi nội dung hoặc muốn đề xuất cải thiện tài liệu? Mở Issue tại repo <code>zskbot/velclaw-cli</code>. Không commit credentials, API key hay token deploy vào bất kỳ repo nào trong hệ sinh thái.</p>
+    </section>
+
+    <div class="docs-pagenav">
+      <a href="hub.html"><span class="k">← Trang trước</span>Hub — App &amp; dự án con</a>
+      <a class="next" href="deploy.html"><span class="k">Trang tiếp →</span>Deploy Runbook</a>
+    </div>
+  </main>
+
+</div>
+
+<footer>
+  <span>Velclaw — github.com/Velclaw/Velclaw</span>
+  <span>Code. Innovate. Elevate.</span>
+</footer>
+
+<script src="assets/js/nav.js"></script>
+<script>
+  // Đánh dấu mục sidebar đang xem theo section hiện trong viewport
+  var sections = document.querySelectorAll('.docs-content section[id]');
+  var links = document.querySelectorAll('.docs-side .doc-link');
+  var obs = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (!entry.isIntersecting) return;
+      links.forEach(function (l) { l.classList.remove('active'); });
+      var match = document.querySelector('.docs-side a[href="#' + entry.target.id + '"]');
+      if (match) match.classList.add('active');
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  sections.forEach(function (s) { obs.observe(s); });
+</script>
+</body>
+</html>
