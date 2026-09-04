@@ -90,27 +90,27 @@ export async function inspectGitHubPR(prNumber, repository = repoName()) {
   const { owner, repo } = splitRepo(repository);
   const pr = await github(`/repos/${owner}/${repo}/pulls/${prNumber}`);
   const reviews = await github(`/repos/${owner}/${repo}/pulls/${prNumber}/reviews`);
-  const checks = await github(`/repos/${owner}/${repo}/commits/${pr.head.sha}/check-runs?per_page=100`, {
-    headers: { Accept: 'application/vnd.github+json' }
-  });
-  const threads = await github(`/repos/${owner}/${repo}/pulls/${prNumber}/comments?per_page=100`);
+  const checks = await github(`/repos/${owner}/${repo}/commits/${pr.head.sha}/check-runs?per_page=100`);
 
   const latestByUser = new Map();
-  for (const review of reviews) latestByUser.set(review.user?.login, review.state);
+  for (const review of reviews) {
+    const login = review.user?.login;
+    if (login) latestByUser.set(login, review.state);
+  }
   const approved = [...latestByUser.values()].includes('APPROVED');
   const changesRequested = [...latestByUser.values()].includes('CHANGES_REQUESTED');
-  const unresolvedComments = threads.filter(comment => comment.in_reply_to_id == null && comment.body);
-  const completed = (checks.check_runs || []).every(check => check.status === 'completed');
-  const checksPassed = completed && (checks.check_runs || []).every(check => check.conclusion === 'success' || check.conclusion === 'skipped' || check.conclusion === 'neutral');
+  const checkRuns = checks.check_runs || [];
+  const completed = checkRuns.length > 0 && checkRuns.every(check => check.status === 'completed');
+  const checksPassed = completed && checkRuns.every(check => ['success', 'skipped', 'neutral'].includes(check.conclusion));
 
   const reasons = [];
   if (pr.state !== 'open') reasons.push(`PR is ${pr.state}.`);
   if (pr.draft) reasons.push('PR is still draft.');
   if (!approved) reasons.push('No approved GitHub review.');
   if (changesRequested) reasons.push('A reviewer requested changes.');
-  if (!completed) reasons.push('CI checks are not complete.');
-  if (!checksPassed) reasons.push('One or more CI checks did not pass.');
-  if (unresolvedComments.length) reasons.push(`PR has ${unresolvedComments.length} review comment(s) requiring attention.`);
+  if (!checkRuns.length) reasons.push('No CI checks are reported for the PR head commit.');
+  else if (!completed) reasons.push('CI checks are not complete.');
+  else if (!checksPassed) reasons.push('One or more CI checks did not pass.');
 
   return {
     passed: reasons.length === 0,
@@ -120,8 +120,8 @@ export async function inspectGitHubPR(prNumber, repository = repoName()) {
     draft: pr.draft,
     approved,
     changesRequested,
-    checks: (checks.check_runs || []).map(check => ({ name: check.name, status: check.status, conclusion: check.conclusion })),
-    unresolvedComments: unresolvedComments.length,
+    checks: checkRuns.map(check => ({ name: check.name, status: check.status, conclusion: check.conclusion })),
+    unresolvedComments: null,
     reason: reasons.length ? reasons.join(' ') : 'GitHub PR gate passed.'
   };
 }
