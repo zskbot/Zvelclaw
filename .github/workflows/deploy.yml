@@ -1,0 +1,43 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment environment
+        required: true
+        default: production
+      task_id:
+        description: Zvelclaw task ID
+        required: true
+      task_description:
+        description: Zvelclaw task description
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Run deployment command
+        env:
+          ZVELCLAW_TASK_ID: ${{ inputs.task_id }}
+          ZVELCLAW_TASK_DESCRIPTION: ${{ inputs.task_description }}
+          ZVELCLAW_DEPLOY_ENV: ${{ inputs.environment }}
+        run: |
+          if [ -z "${{ vars.ZVELCLAW_DEPLOY_COMMAND }}" ]; then
+            echo "ZVELCLAW_DEPLOY_COMMAND is not configured for this environment."
+            exit 1
+          fi
+          bash -lc "${{ vars.ZVELCLAW_DEPLOY_COMMAND }}"
