@@ -104,10 +104,10 @@
           }
 
           list.innerHTML = tasks.map((task) => `
-            <article class="row">
+            <a class="row" href="task.html?id=${encodeURIComponent(task.id)}" aria-label="Mở task ${escapeHtml(task.description)}">
               <div><strong>${escapeHtml(task.description)}</strong><small>${escapeHtml(task.id)} · ${escapeHtml(formatDate(task.createdAt))}</small></div>
               <span class="badge">${escapeHtml(String(task.state || 'created').toUpperCase())}</span>
-            </article>
+            </a>
           `).join('');
         })
         .catch((error) => {
