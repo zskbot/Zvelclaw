@@ -1,15 +1,10 @@
 {
   "name": "zvelclaw",
   "version": "0.1.0",
-  "description": "Zvelclaw — AI-native software lifecycle CLI and execution workspace.",
+  "description": "AI-native developer CLI for task execution, review gates, GitHub workflows, and deployment.",
   "type": "module",
-  "bin": { "zvelclaw": "./src/cli.js" },
+  "bin": { "zvelclaw": "src/cli.js" },
+  "scripts": { "start": "node src/cli.js", "test": "node --test", "lint": "node --check src/cli.js" },
   "engines": { "node": ">=20" },
-  "scripts": {
-    "start": "node ./src/cli.js",
-    "test": "node --test",
-    "lint": "node --check ./src/cli.js"
-  },
-  "license": "MIT",
-  "files": ["src", "README.md", "LICENSE"]
+  "license": "MIT"
 }
