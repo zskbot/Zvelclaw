@@ -2,6 +2,18 @@
   const drawer = document.querySelector('.drawer');
   const menu = document.querySelector('[data-menu]');
 
+  if (drawer) {
+    const existingCodespaces = drawer.querySelector('a[href="codespaces.html"]');
+    if (!existingCodespaces) {
+      const codesLink = document.createElement('a');
+      codesLink.href = 'codespaces.html';
+      codesLink.innerHTML = '<span class="ico">08</span>Codespaces';
+      const settingsLink = drawer.querySelector('a[href="settings.html"]');
+      if (settingsLink) drawer.insertBefore(codesLink, settingsLink);
+      else drawer.appendChild(codesLink);
+    }
+  }
+
   if (drawer && menu) {
     const setOpen = (open) => {
       drawer.classList.toggle('open', open);

@@ -134,3 +134,10 @@ export async function inspectDeployment(task, plan = deploymentPlan(task)) {
     }
   };
 }
+
+export async function retryDeployment(task, plan = deploymentPlan(task), ref = 'main') {
+  if (!['deploy_failed', 'failed'].includes(task.state)) {
+    throw new Error(`Deployment retry requires a failed deployment. Current state: ${task.state}.`);
+  }
+  return triggerDeployment(task, plan, ref);
+}
