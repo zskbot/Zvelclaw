@@ -1,0 +1,23 @@
+/* Heritage — generated from DESIGN.md */
+:root {
+	--color-primary: #1A1C1E;
+	--color-secondary: #6C7278;
+	--color-tertiary: #B8422E;
+	--color-neutral: #F7F5F2;
+	--color-on-tertiary: #FFFFFF;
+	--color-border: #E5E0D8;
+	--space-sm: 8px;
+	--space-md: 16px;
+	--space-lg: 24px;
+	--radius-sm: 4px;
+	--radius-md: 8px;
+	--font-h1: 'Public Sans', system-ui;
+	--font-size-h1: 3rem;
+	--font-weight-h1: 700;
+	--font-body-md: 'Public Sans', system-ui;
+	--font-size-body-md: 1rem;
+	--font-weight-body-md: 400;
+	--font-label-caps: 'Space Grotesk', system-ui;
+	--font-size-label-caps: 0.75rem;
+	--font-weight-label-caps: 600;
+}
