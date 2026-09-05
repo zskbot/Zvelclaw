@@ -1,16 +1,19 @@
 (() => {
   const drawer = document.querySelector('.drawer');
   const menu = document.querySelector('[data-menu]');
+  const isHome = /(?:^|\/)Zvelclaw\/?$|(?:^|\/)Zvelclaw\/index\.html$|\/index\.html$/.test(window.location.pathname);
 
   if (drawer) {
     const existingCodespaces = drawer.querySelector('a[href="codespaces.html"]');
     if (!existingCodespaces) {
       const codesLink = document.createElement('a');
-      codesLink.href = 'codespaces.html';
+      codesLink.href = isHome ? '#codespaces' : 'codespaces.html';
       codesLink.innerHTML = '<span class="ico">08</span>Codespaces';
       const settingsLink = drawer.querySelector('a[href="settings.html"]');
       if (settingsLink) drawer.insertBefore(codesLink, settingsLink);
       else drawer.appendChild(codesLink);
+    } else if (isHome) {
+      existingCodespaces.href = '#codespaces';
     }
   }
 
@@ -24,7 +27,14 @@
     const currentPath = window.location.pathname.replace(/\\/g, '/');
     drawer.querySelectorAll('a[href]').forEach((link) => {
       const href = link.getAttribute('href');
-      if (!href || href.startsWith('http') || href.startsWith('#')) return;
+      if (!href || href.startsWith('http')) return;
+
+      if (isHome && href === '#codespaces') {
+        link.addEventListener('click', () => setOpen(false));
+        return;
+      }
+
+      if (href.startsWith('#')) return;
 
       const target = new URL(href, window.location.href).pathname.replace(/\\/g, '/');
       const current = currentPath.endsWith('/') ? `${currentPath}index.html` : currentPath;
@@ -58,6 +68,28 @@
         menu.focus();
       }
     });
+  }
+
+  if (isHome) {
+    const existing = document.querySelector('#codespaces');
+    if (!existing) {
+      const section = document.createElement('section');
+      section.id = 'codespaces';
+      section.style.cssText = 'max-width:1180px;margin:0 auto 100px;padding:0 40px;scroll-margin-top:90px;';
+      section.innerHTML = `
+        <div style="background:var(--ink-2);border:1px solid var(--line);overflow:hidden;">
+          <div style="padding:22px 24px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:16px;">
+            <div><div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--claw);margin-bottom:7px;">08 · CODESPACES</div><h2 style="font-size:28px;font-weight:600;">Cloud development, ngay trong Zvelclaw.</h2><p style="margin-top:8px;color:var(--muted);font-size:14px;">Codespaces được tích hợp trực tiếp vào trang GitHub Pages này.</p></div>
+            <a class="btn btn-primary" href="pages/codespaces.html">Mở workspace →</a>
+          </div>
+          <div style="padding:0;">
+            <iframe title="Zvelclaw Codespaces" src="pages/codespaces.html" loading="lazy" style="display:block;width:100%;height:780px;border:0;background:var(--ink);"></iframe>
+          </div>
+        </div>`;
+      const footer = document.querySelector('footer');
+      if (footer) footer.parentNode.insertBefore(section, footer);
+      else document.body.appendChild(section);
+    }
   }
 
   const form = document.querySelector('#task-form');
