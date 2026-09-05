@@ -1,0 +1,16 @@
+/* Tailwind v4 — paste into your global CSS */
+@theme {
+	--color-primary: #1A1C1E;
+	--color-secondary: #6C7278;
+	--color-tertiary: #B8422E;
+	--color-neutral: #F7F5F2;
+	--color-on-tertiary: #FFFFFF;
+	--color-border: #E5E0D8;
+	--spacing-sm: 8px;
+	--spacing-md: 16px;
+	--spacing-lg: 24px;
+	--radius-sm: 4px;
+	--radius-md: 8px;
+	--font-public-sans: 'Public Sans', system-ui, sans-serif;
+	--font-space-grotesk: 'Space Grotesk', system-ui, sans-serif;
+}
