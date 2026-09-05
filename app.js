@@ -2,6 +2,8 @@
   const isHome = /(?:^|\/)Zvelclaw\/?$|(?:^|\/)Zvelclaw\/index\.html$|\/index\.html$/.test(window.location.pathname);
   const isCodespaces = /\/pages\/codespaces\.html$/.test(window.location.pathname);
 
+  // Restore the original two-page navigation model:
+  // GitHub Pages home and the standalone Zvelclaw/Codespaces page.
   if (isHome) {
     const topnav = document.querySelector('.topnav');
     if (topnav && !topnav.querySelector('[data-menu]')) {
@@ -27,7 +29,7 @@
         <a href="pages/codes.html"><span class="ico">04</span>Mã số</a>
         <a href="pages/customize.html"><span class="ico">05</span>Tùy chỉnh</a>
         <a href="pages/design.html"><span class="ico">06</span>Thiết kế</a>
-        <a href="#codespaces"><span class="ico">08</span>Codespaces</a>
+        <a href="pages/codespaces.html"><span class="ico">08</span>Codespaces</a>
         <a href="pages/settings.html"><span class="ico">07</span>Cài đặt</a>`;
       document.body.insertBefore(drawer, document.body.firstElementChild);
 
@@ -46,14 +48,13 @@
       `;
       document.head.appendChild(style);
 
-      const drawerLinks = drawer.querySelectorAll('a[href]');
       const setOpen = (open) => {
         drawer.classList.toggle('open', open);
         menuButton.setAttribute('aria-expanded', String(open));
         drawer.setAttribute('aria-hidden', String(!open));
       };
 
-      drawerLinks.forEach((link) => {
+      drawer.querySelectorAll('a[href]').forEach((link) => {
         link.addEventListener('click', () => setOpen(false));
       });
       menuButton.addEventListener('click', (event) => {
@@ -76,7 +77,7 @@
   const menu = document.querySelector('[data-menu]');
 
   if (drawer) {
-    const existingCodespaces = drawer.querySelector('a[href="codespaces.html"], a[href="#codespaces"]');
+    const existingCodespaces = drawer.querySelector('a[href="codespaces.html"], a[href="pages/codespaces.html"], a[href="#codespaces"]');
     if (!existingCodespaces && !isHome) {
       const codesLink = document.createElement('a');
       codesLink.href = 'codespaces.html';
@@ -115,12 +116,6 @@
     drawer.querySelectorAll('a[href]').forEach((link) => {
       const href = link.getAttribute('href');
       if (!href || href.startsWith('http')) return;
-
-      if (isHome && href === '#codespaces') {
-        link.addEventListener('click', () => setOpen(false));
-        return;
-      }
-
       if (href.startsWith('#')) return;
 
       const target = new URL(href, window.location.href).pathname.replace(/\\/g, '/');
@@ -158,28 +153,7 @@
     }
   }
 
-  if (isHome) {
-    const existing = document.querySelector('#codespaces');
-    if (!existing) {
-      const section = document.createElement('section');
-      section.id = 'codespaces';
-      section.style.cssText = 'max-width:1180px;margin:0 auto 100px;padding:0 40px;scroll-margin-top:90px;';
-      section.innerHTML = `
-        <div style="background:var(--ink-2);border:1px solid var(--line);overflow:hidden;">
-          <div style="padding:22px 24px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:16px;">
-            <div><div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--claw);margin-bottom:7px;">08 · CODESPACES</div><h2 style="font-size:28px;font-weight:600;">Cloud development, ngay trong Zvelclaw.</h2><p style="margin-top:8px;color:var(--muted);font-size:14px;">Codespaces được tích hợp trực tiếp vào trang GitHub Pages này.</p></div>
-            <a class="btn btn-primary" href="pages/codespaces.html">Mở workspace →</a>
-          </div>
-          <div style="padding:0;">
-            <iframe title="Zvelclaw Codespaces" src="pages/codespaces.html" loading="lazy" style="display:block;width:100%;height:780px;border:0;background:var(--ink);"></iframe>
-          </div>
-        </div>`;
-      const footer = document.querySelector('footer');
-      if (footer) footer.parentNode.insertBefore(section, footer);
-      else document.body.appendChild(section);
-    }
-  }
-
+  // The GitHub Pages homepage remains standalone. Do not embed Codespaces here.
   const form = document.querySelector('#task-form');
   const result = document.querySelector('#task-result');
   if (!form || !result) return;
