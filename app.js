@@ -2,6 +2,7 @@
   const drawer = document.querySelector('.drawer');
   const menu = document.querySelector('[data-menu]');
   const isHome = /(?:^|\/)Zvelclaw\/?$|(?:^|\/)Zvelclaw\/index\.html$|\/index\.html$/.test(window.location.pathname);
+  const isCodespaces = /\/pages\/codespaces\.html$/.test(window.location.pathname);
 
   if (drawer) {
     const existingCodespaces = drawer.querySelector('a[href="codespaces.html"]');
@@ -14,6 +15,23 @@
       else drawer.appendChild(codesLink);
     } else if (isHome) {
       existingCodespaces.href = '#codespaces';
+    }
+  }
+
+  if (isCodespaces) {
+    const topbar = document.querySelector('.topbar');
+    if (topbar && !topbar.querySelector('.page-navlinks')) {
+      const nav = document.createElement('nav');
+      nav.className = 'page-navlinks';
+      nav.setAttribute('aria-label', 'Điều hướng trang');
+      nav.style.cssText = 'display:flex;align-items:center;gap:6px;margin-left:auto;margin-right:12px;flex-wrap:wrap;';
+      nav.innerHTML = `
+        <a href="../" style="padding:7px 10px;border:1px solid transparent;border-radius:7px;color:var(--muted);text-decoration:none;font-size:13px;white-space:nowrap;">Tổng quan</a>
+        <a href="../#deploy" style="padding:7px 10px;border:1px solid transparent;border-radius:7px;color:var(--muted);text-decoration:none;font-size:13px;white-space:nowrap;">Deploy</a>
+        <a href="codespaces.html" aria-current="page" style="padding:7px 10px;border:1px solid var(--line);border-radius:7px;color:inherit;text-decoration:none;font-size:13px;white-space:nowrap;">Codespaces</a>`;
+      const title = topbar.querySelector('.page-title');
+      if (title) topbar.insertBefore(nav, title);
+      else topbar.appendChild(nav);
     }
   }
 
