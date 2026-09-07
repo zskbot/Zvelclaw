@@ -1,8 +1,0 @@
-{
-  "endpoint": "/repos/octocat/octocat.github.io/contents",
-  "page": 1,
-  "perPage": 100,
-  "repo": "octocat/octocat.github.io",
-  "task": "list top-level entries",
-  "userQuery": "List the repository's top-level entries for octocat/octocat.github.io"
-}
