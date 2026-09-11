@@ -1,0 +1,22 @@
+curl -X PATCH \
+	"https://api.cloudflare.com/client/v4/zones/b82d7ca9d3484f0c56d961e8a7a856da/rulesets/0124a557bceb4a4482db63aca1997ec6/rules/712822d56cac42749efa1ec67331cbc5" \
+	-H "Authorization: Bearer $CF_AUTH_TOKEN" \
+	-d '{
+    "description": "Leaked credential check",
+    "expression": "(starts_with(http.request.uri.path, \"/pulic\"))",
+    "action": "block",
+    "enabled": true,
+    "position": {
+        "index": 1
+    },
+    "ratelimit": {
+        "characteristics": [
+            "ip.src"
+        ],
+        "mitigation_timeout": 10,
+        "period": 10,
+        "requests_per_period": 5,
+        "rate_exceeds": "request_base"
+    },
+    "customCounter": false
+}'
